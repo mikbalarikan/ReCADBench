@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/backend_manifest/0.1.0",
+  "title": "backend.yaml (L1, pinned external interface)",
+  "type": "object",
+  "required": [
+    "id",
+    "interface",
+    "software",
+    "hosts",
+    "adapter_cli",
+    "max_parallel"
+  ],
+  "properties": {
+    "id": {
+      "enum": [
+        "nx",
+        "build123d",
+        "solidcraft",
+        "freecad"
+      ]
+    },
+    "software": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "repo URL / PyPI name, pinned"
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "mcp",
+            "cli"
+          ]
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "cad_prefixes": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mutating": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "MCP tool-name prefixes gate_hook treats as CAD calls (kind=mcp)"
+        },
+        "allowed_commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shell command patterns the agent may run (kind=cli), e.g. 'recadbench nx-run cad/*.py'. All are treated as mutating."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mcp"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "mcp",
+              "cad_prefixes"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cli"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "allowed_commands"
+            ]
+          }
+        }
+      ]
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "windows",
+          "linux",
+          "macos",
+          "termux"
+        ]
+      }
+    },
+    "adapter_cli": {
+      "type": "object",
+      "required": [
+        "export",
+        "extract",
+        "set_param",
+        "replay"
+      ],
+      "properties": {
+        "export": {
+          "type": "string"
+        },
+        "extract": {
+          "type": "string"
+        },
+        "set_param": {
+          "type": "string"
+        },
+        "replay": {
+          "type": "string"
+        },
+        "execute_ir": {
+          "type": "string"
+        }
+      }
+    },
+    "max_parallel": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "conformance": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "date": {
+          "type": "string"
+        },
+        "software_version": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

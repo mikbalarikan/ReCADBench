@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/features/0.1.0",
+  "title": "Extracted features (adapter output)",
+  "type": "object",
+  "required": [
+    "tool",
+    "native_file",
+    "features",
+    "count"
+  ],
+  "properties": {
+    "tool": {
+      "type": "string",
+      "description": "backend id"
+    },
+    "native_file": {
+      "type": "string"
+    },
+    "count": {
+      "type": "integer",
+      "description": "Derived: number of features with counted=true. Validator checks consistency."
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "native_type",
+          "taxonomy_type",
+          "counted"
+        ],
+        "properties": {
+          "native_name": {
+            "type": "string"
+          },
+          "native_type": {
+            "type": "string"
+          },
+          "taxonomy_type": {
+            "type": "string"
+          },
+          "counted": {
+            "type": "boolean"
+          },
+          "params": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "unmapped": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Native items that are not parametric features (dumb solids, raw kernel shapes, imported bodies). Non-empty ⇒ gate fail."
+    },
+    "native_sha256": {
+      "type": "string"
+    },
+    "face_count": {
+      "type": "integer"
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "feature": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Named/driving parameters found in the native model (for parametric-presence check)"
+    }
+  }
+}

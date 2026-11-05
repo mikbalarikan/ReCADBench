@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/result/0.1.0",
+  "title": "Evaluation result",
+  "type": "object",
+  "required": [
+    "run_id",
+    "gate",
+    "scores",
+    "pass",
+    "versions",
+    "track",
+    "part_id",
+    "strategy",
+    "model",
+    "backend",
+    "skillset"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "gate": {
+      "type": "object",
+      "required": [
+        "ok"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "faces_pred": {
+          "type": "integer"
+        },
+        "faces_gt": {
+          "type": "integer"
+        }
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "properties": {
+        "rmse": {
+          "type": "number"
+        },
+        "datum_offset_mm": {
+          "type": "number"
+        },
+        "datum_offset_deg": {
+          "type": "number"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "p_tight": {
+          "type": "number"
+        },
+        "p_wide": {
+          "type": "number"
+        },
+        "mean": {
+          "type": "number"
+        },
+        "rms": {
+          "type": "number"
+        },
+        "p95": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "hausdorff": {
+          "type": "number"
+        },
+        "r_feat": {
+          "type": "number"
+        },
+        "face_ratio": {
+          "type": "number"
+        },
+        "key_dims_ok": {
+          "type": "number"
+        },
+        "face_type_tvd": {
+          "type": "number"
+        },
+        "ir_adherence": {
+          "type": "number"
+        },
+        "plan_drift": {
+          "type": "number"
+        },
+        "param_coverage": {
+          "type": "number"
+        },
+        "b1_match": {
+          "type": "boolean"
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "S1": {
+          "type": "number"
+        },
+        "S2": {
+          "type": "number"
+        },
+        "S3": {
+          "type": "number"
+        },
+        "S4": {
+          "type": "number"
+        },
+        "S5": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "number"
+        },
+        "capped": {
+          "type": "boolean"
+        },
+        "plan_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "efficiency": {
+      "type": "object",
+      "properties": {
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "wall_s": {
+          "type": "number"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "tool_errors": {
+          "type": "integer"
+        }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "required": [
+        "spec",
+        "evaluator"
+      ],
+      "properties": {
+        "spec": {
+          "type": "string"
+        },
+        "evaluator": {
+          "type": "string"
+        }
+      }
+    },
+    "track": {
+      "enum": [
+        "T",
+        "S",
+        "E"
+      ]
+    },
+    "part_id": {
+      "type": "string"
+    },
+    "replicate": {
+      "type": "integer"
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "git_sha": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "software_version": {
+          "type": "string"
+        }
+      }
+    },
+    "skillset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "git_sha": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

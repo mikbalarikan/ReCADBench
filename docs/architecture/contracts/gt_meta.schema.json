@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/gt_meta/0.1.0",
+  "title": "meta.yaml (GT, private)",
+  "type": "object",
+  "required": [
+    "part_id",
+    "tolerance_class",
+    "tier",
+    "n_ref",
+    "faces_gt",
+    "face_types",
+    "b1",
+    "split"
+  ],
+  "properties": {
+    "part_id": {
+      "type": "string"
+    },
+    "tolerance_class": {
+      "enum": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "tier": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "split": {
+      "enum": [
+        "dev",
+        "test"
+      ]
+    },
+    "n_ref": {
+      "type": "integer",
+      "description": "Skilled modeller's minimal reasonable feature count (taxonomy counting rule)"
+    },
+    "faces_gt": {
+      "type": "integer"
+    },
+    "face_types": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "Area fraction per face type"
+    },
+    "b1": {
+      "type": "integer"
+    },
+    "family": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "description": "Provenance (own design, client-cleared, etc.)"
+    },
+    "tessellation_chord_mm": {
+      "type": "number",
+      "description": "Used by make_task; ≤ 1/3 of class tight band"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
