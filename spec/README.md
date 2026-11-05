@@ -2,12 +2,12 @@
 
 The ReCADBench contracts: JSON Schemas, the feature taxonomy, pydantic v2 models and a validator.
 **Source of truth** for every repo. Schema changes need an ADR in `docs/adr/` (see
-[0001](../docs/adr/0001-ir-params-anyof.md)) and a spec version bump. Downstream repos pin a tag.
+[0001](../docs/adr/0001-ir-params-anyof.md), [0002](../docs/adr/0002-real-scan-input.md)) and a spec version bump. Downstream repos pin a tag.
 
 ## Install (pinned)
 
 ```bash
-pip install "recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.1.0#subdirectory=spec"
+pip install "recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.2.0#subdirectory=spec"
 ```
 
 ## Use
@@ -26,8 +26,8 @@ from recadbench_spec import validate_file, load_taxonomy, RePlan
 
 report = validate_file("plan/re_plan.v2.json")
 assert report.ok, [str(e) for e in report.errors]
-plan: RePlan = report.model                     # typed access
-n = load_taxonomy().count(["sketch", "extrude", "hole", "pattern_linear"])   # → 3
+plan: RePlan = report.model  # typed access
+n = load_taxonomy().count(["sketch", "extrude", "hole", "pattern_linear"])  # → 3
 ```
 
 ## Contents
@@ -64,9 +64,9 @@ n = load_taxonomy().count(["sketch", "extrude", "hole", "pattern_linear"])   # �
 | `backend_manifest` | MCP: non-empty `cad_prefixes.all`, `mutating` ⊆ `all`; CLI: ≥1 allowed command; build123d has `execute_ir`; conformance passed ≤ total; `backend.yaml` sits in folder `<id>/` | `allowed_commands` on MCP; NX `max_parallel` ≠ 1 |
 | `skillset_manifest` | `id` == `backend.id`; `skillset.yaml` in folder `<id>/`; no duplicate skills/agents/lib | |
 | `strategy_manifest` | only `oracle` may set `inject_gt_plan`; `strategy.yaml` in folder `<id>/`; ≥1 stage; no duplicate tools | oracle without `inject_gt_plan` |
-| `task` | unique deliverables; `input_stl` ends in `.stl`; budgets > 0 | |
+| `task` | unique deliverables; `input_stl` ends in `.stl`; budgets > 0; no `scan` block unless `input_kind: scan` (schema: `scan` required for scans) | |
 | `key_dims` | unique names; diameter/radius > 0; no zero `axis_dir` | |
-| `gt_meta` | `face_types` keys ⊆ taxonomy `face_types`, fractions ≥ 0 and sum to 1 (±0.01); `n_ref`, `faces_gt` ≥ 1; chord > 0 | |
+| `gt_meta` | `face_types` keys ⊆ taxonomy `face_types`, fractions ≥ 0 and sum to 1 (±0.01); `n_ref`, `faces_gt` ≥ 1; chord > 0; `T_scan_to_gt` is rigid (orthonormal, det > 0, last row 0 0 0 1) and converged; floor values ≥ 0; **`split: test` requires no contamination flag, `gt_author` ≠ `agent`, and a non-synthetic source** (schema: scan/registration/scan_floor/observability required unless synthetic; chord required if synthetic) | chord on a scan part; registration on a synthetic part |
 | `result` | `pass` ⇒ `gate.ok`; fractions in [0, 1] | Track S without `plan_score` |
 
 ## Tests

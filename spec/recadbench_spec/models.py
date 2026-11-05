@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from .taxonomy import feature_type_enum
 
-SPEC_VERSION = "0.1.0"
+SPEC_VERSION = "0.2.0"
 
 FeatureType = feature_type_enum()
 
@@ -70,12 +70,33 @@ class TaskBudgets(_Open):
     max_tokens: int | None = None
 
 
+class TaskScan(_Open):
+    scanner: str
+    mode: str | None = None
+    sessions: Annotated[int, Field(ge=1)] | None = None
+    triangles: Annotated[int, Field(ge=1)] | None = None
+    watertight: bool | None = None
+    frame: Literal["scanner", "prealigned"]
+    known_defects: list[str] | None = None
+
+
+class AuxInput(_Open):
+    kind: Literal["calipers", "photos", "notes"]
+    path: str
+
+
+InputKind = Literal["scan", "synthetic_clean", "synthetic_degraded"]
+
+
 class Task(_Document):
     """`task.yaml` — agent-visible task card."""
 
-    spec_version: Literal["0.1.0"]
+    spec_version: Literal["0.2.0"]
     part_id: str
     input_stl: str
+    input_kind: InputKind
+    scan: TaskScan | None = None
+    aux_inputs: list[AuxInput] | None = None
     units: Literal["mm"]
     tolerance_class: ToleranceClass
     tier: Tier
@@ -209,7 +230,7 @@ class ReferencePlane(_Closed):
 class RePlan(_ClosedDocument):
     """`plan/re_plan.vN.json` (and GT `gt_plan.json`) — the L3→L2 seam."""
 
-    spec_version: Literal["0.1.0"]
+    spec_version: Literal["0.2.0"]
     part_id: str
     revision: Annotated[int, Field(ge=1)]
     units: Literal["mm"]
@@ -247,6 +268,56 @@ class KeyDims(_Document):
     dims: Annotated[list[KeyDim], Field(min_length=3, max_length=12)]
 
 
+class Contamination(_Open):
+    public_scan: bool
+    public_cad: bool
+    commercial_replica: bool
+    note: str | None = None
+
+    @property
+    def any(self) -> bool:
+        return self.public_scan or self.public_cad or self.commercial_replica
+
+
+class GtScan(_Open):
+    file: str
+    sha256: str
+    scanner: str | None = None
+    mode: str | None = None
+    sessions: int | None = None
+    date: str | None = None
+    triangles: int | None = None
+    known_defects: list[str] | None = None
+
+
+Mat4 = Annotated[
+    list[Annotated[list[float], Field(min_length=4, max_length=4)]],
+    Field(min_length=4, max_length=4),
+]
+
+
+class Registration(_Open):
+    T_scan_to_gt: Mat4
+    method: str
+    rmse_mm: float
+    converged: bool
+    seed: int | None = None
+    iterations: int | None = None
+
+
+class ScanFloor(_Open):
+    scan_to_gt_p50_mm: float | None = None
+    scan_to_gt_p95_mm: float
+    gt_to_scan_observable_p95_mm: float
+    max_mm: float | None = None
+
+
+class Observability(_Open):
+    observable_fraction: Annotated[float, Field(ge=0, le=1)]
+    threshold_mm: float
+    mask_file: str | None = None
+
+
 class GtMeta(_Document):
     """`meta.yaml` (GT, private)."""
 
@@ -262,6 +333,13 @@ class GtMeta(_Document):
     source: str | None = None
     tessellation_chord_mm: float | None = None
     notes: str | None = None
+    source_kind: Literal["print_scan", "scan_rebuild", "synthetic"]
+    gt_author: Literal["human", "agent", "agent_human_reviewed"]
+    contamination: Contamination
+    scan: GtScan | None = None
+    registration: Registration | None = None
+    scan_floor: ScanFloor | None = None
+    observability: Observability | None = None
 
 
 # ---------------------------------------------------------------------------------- features
@@ -483,6 +561,10 @@ class Metrics(_Open):
     plan_drift: float | None = None
     param_coverage: float | None = None
     b1_match: bool | None = None
+    p_tight_inferred: float | None = None
+    p_wide_inferred: float | None = None
+    band_tight_eff_mm: float | None = None
+    band_wide_eff_mm: float | None = None
 
 
 class Scores(_Open):

@@ -1,7 +1,8 @@
 # ReCADBench
 
-STL → parametric CAD reverse-engineering benchmark. An agent gets a mesh (`input.stl`) and must
-produce a clean, editable, single-solid parametric model. Three layers are evaluated separately:
+Scan → parametric CAD reverse-engineering benchmark. An agent gets a **real 3D scan** (`input.stl`:
+raw, noisy, holed, in the scanner frame) and must produce a clean, editable, single-solid parametric
+model that recovers design intent ([ADR 0002](docs/adr/0002-real-scan-input.md)). Three layers are evaluated separately:
 
 1. **L1 — CAD backend** (pinned, external): build123d-mcp, `solidcraft-cli mcp`, a FreeCAD MCP, NX via journals — `backends/`
 2. **L2 — CAD skillset** (ours, private `recadbench-cad-skills`) — Track T
@@ -10,7 +11,7 @@ produce a clean, editable, single-solid parametric model. Three layers are evalu
 Architecture and build plan: [`docs/architecture/`](docs/architecture/README.md) (start with `00_DECISIONS.md`).
 Progress: [`STATUS.md`](STATUS.md).
 
-> Status: **P1 scaffold** — folder structure, contracts and CI only. No benchmark logic yet.
+> Status: P1 scaffold + P2 spec (`recadbench-spec` 0.2.0). v1 data = scan-rebuild parts, **dev-only** (no frozen test split yet).
 
 ## Repositories
 

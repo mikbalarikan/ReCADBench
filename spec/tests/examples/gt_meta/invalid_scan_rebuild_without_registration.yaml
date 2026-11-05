@@ -1,0 +1,34 @@
+part_id: synthetic_plate_01
+tolerance_class: B
+tier: 1
+split: dev
+n_ref: 4
+faces_gt: 30
+face_types:
+  plane: 0.82
+  cylinder: 0.18
+b1: 4
+family: plate
+source: synthetic example (spec test fixture)
+source_kind: scan_rebuild
+gt_author: human
+contamination:
+  public_scan: false
+  public_cad: false
+  commercial_replica: false
+scan:
+  file: scan_raw.stl
+  sha256: abababababababababababababababababababababababababababababababab
+  scanner: Creality CR-Scan Raptor
+  mode: laser
+  sessions: 1
+  date: '2026-09-25'
+  triangles: 250000
+scan_floor:
+  scan_to_gt_p50_mm: 0.03
+  scan_to_gt_p95_mm: 0.15
+  gt_to_scan_observable_p95_mm: 0.18
+  max_mm: 0.9
+observability:
+  observable_fraction: 0.84
+  threshold_mm: 0.5
