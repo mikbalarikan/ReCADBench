@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+# secrets — never commit tokens (see README "Access tokens")
+.env
+.env.*
+*.token
+
+# results stay out of git (Drive)
+results/*
+!results/README.md
+runs/

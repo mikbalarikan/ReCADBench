@@ -1,0 +1,12 @@
+# Repo-level tool config only (each package has its own pyproject.toml).
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+testpaths = ["spec/tests", "evaluator/tests", "runner/tests"]
