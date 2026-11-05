@@ -9,4 +9,4 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-testpaths = ["spec/tests", "evaluator/tests", "runner/tests"]
+testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "dataset/tests"]

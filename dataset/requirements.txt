@@ -1,0 +1,8 @@
+# dataset/tools (register_gt.py, make_task.py) — evaluator host / GT authoring
+numpy>=1.26
+scipy>=1.11
+trimesh>=4.0
+rtree>=1.0
+pyyaml>=6
+# recadbench-spec: pip install -e ./spec (same repo)
+# optional: build123d (only to tessellate gt.step; otherwise pass a CAD-exported mesh via --gt-mesh)
