@@ -18,7 +18,15 @@ All thresholds are v1 proposals, derived from manufacturing standards (ISO 2768,
 ## 3. Rubric (100)
 
 ### S1 Deviation — 40
-Two-way sampling **GT B-rep ↔ prediction B-rep** (`gt.step`, not the STL; 50k pts each, fixed seed), unsigned distance. The agent's `self_deviation` uses the STL, so it sees a proxy, not its score. `make_task` tessellates with chord tolerance ≤ ⅓ of the tight band. Tolerance class from `meta.yaml`:
+Two-way sampling **GT B-rep ↔ prediction B-rep** (`gt.step`, not the STL; 50k pts each, fixed seed), unsigned distance. The agent's `self_deviation` uses the STL (the raw scan), so it sees a proxy, not its score.
+
+**Scan inputs (ADR 0002):**
+- The prediction is in the scanner frame; it is mapped into the GT frame with `meta.yaml: registration.T_scan_to_gt`, then the usual alignment runs.
+- **Observable region only:** GT sample points the scan does not cover (`observability`) are excluded from `p_tight`/`p_wide` and reported as `p_tight_inferred`/`p_wide_inferred` (not scored in v1).
+- **Noise floor:** effective bands `band_eff = max(class band, k · scan_floor.scan_to_gt_p95_mm)`, `k = 1.5` provisional (P11 calibrates). Reported as `band_tight_eff_mm` / `band_wide_eff_mm`.
+- Synthetic inputs (`input_kind: synthetic_*`) skip registration and floor; `make_task` tessellates them with chord ≤ ⅓ of the tight band.
+
+Tolerance class from `meta.yaml`:
 
 | Class | Tight band | Target | Wide band | Target |
 |---|---|---|---|---|

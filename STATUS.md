@@ -6,22 +6,32 @@ Update at the end of every session.
 | Prompt | Scope in this repo | State |
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
-| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); tag `spec-v0.1.0` must be created on GitHub (tag push blocked from the cloud session) |
+| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
 | P3 | Backends build123d / solidcraft / freecad + conformance suite | todo |
 | P4 | NX backend (runner, adapter, replays) | todo |
-| P6 | dataset/tools/make_task.py | todo |
+| P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | todo |
 | P7 | Evaluator + golden tests | todo |
 | P10 | Runner, compose, gate_hook, orchestrator | todo |
 | P11 | Pilot + calibration, threshold ADR, spec-v1.0.0 | todo |
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-05 — ADR 0002: inputs are REAL SCANS (scanner frame); spec 0.2.0 (task `input_kind` + scan metadata; gt_meta provenance/contamination, registration, scan floor, observability; result inferred-region metrics; test-split eligibility rules); architecture docs, P6/P7 prompts and roadmap updated. v1 = scan-rebuild parts, dev only.
 - 2026-11-05 — P1 Termux spike PASSED on a phone (Xiaomi 23117RA68G, Android 13, aarch64): STEP export via build123d-mcp, also via `proot-distro` stdio from the Termux side. Details: `backends/build123d/install.md`.
 - 2026-11-05 — P2: recadbench-spec 0.1.0 — pydantic models for all 10 schemas, taxonomy loader + counting rule, taxonomy-compiled IR schema (type enum, per-type params, needs_sketch), semantic rules, `recadbench-spec validate|schemas|taxonomy|compile-schema`, 101 tests (1 valid + 2 invalid examples per schema, round-trip, model↔schema drift). ADR 0001 fixes the IR `params` oneOf bug.
 - 2026-11-05 — P1 Termux spike: PoCAD-method recipe + build123d-mcp 0.3.91 verified on x86_64 Ubuntu 24.04 (STEP export via MCP OK). Phone run still pending.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From ADR 0002 (real scans)
+- Decided: golden examples **cleared** (v1 dev pool, ADR 0002 table); **open-dedica kept aside** (later: calibrated reference STEPs once agent rebuilds deviate less).
+- M02-02-03 gear: is `M02-02-03.STL` a real scan? (provenance of the mesh)
+- Full-res originals of the golden-example scans are on Drive (`H:\My Drive\…`, see each MANIFEST.json `source_path`) — P6 must use those, not the decimated copies.
+- **Scan storage** for recadbench-data (18–50 MB each): Git LFS vs Drive — decide in P6.
+- **`k` for the scan-floor band widening** (1.5 provisional) and the observability threshold — calibrate in P11.
+- **recadbench-data / recadbench-gt READMEs** still describe tessellated inputs — update in P6.
+- **No frozen test split** until `print_scan` (OGUZ print + scan) parts exist.
 
 ### From P2 (spec)
 - **Sketch dimensions can't be parameters.** IR sketch entities (`rect.width`, `circle.radius`, …) take plain

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/re_plan_ir/0.1.0",
+  "$id": "recadbench/re_plan_ir/0.2.0",
   "title": "RE Plan IR",
-  "description": "Tool-neutral reverse-engineering feature plan. Written by a strategy before any CAD call; consumed by tool harnesses and the evaluator. Describes design intent, not CAD commands. Coordinates are in the input STL frame (mm). File naming: plan/re_plan.v<revision>.json. The `type` enum and per-type `params` keys are generated from feature_taxonomy.yaml by recadbench-spec; this file lists types explicitly for readability.",
+  "description": "Tool-neutral reverse-engineering feature plan. Written by a strategy before any CAD call; consumed by tool harnesses and the evaluator. Describes design intent, not CAD commands. Coordinates are in the input STL frame (mm) — for scans this is the scanner frame (ADR 0002). File naming: plan/re_plan.v<revision>.json. The `type` enum and per-type `params` keys are generated from feature_taxonomy.yaml by recadbench-spec; this file lists types explicitly for readability.",
   "type": "object",
   "required": [
     "spec_version",
@@ -15,7 +15,7 @@
   "additionalProperties": false,
   "properties": {
     "spec_version": {
-      "const": "0.1.0"
+      "const": "0.2.0"
     },
     "part_id": {
       "type": "string"

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/task/0.1.0",
+  "$id": "recadbench/task/0.2.0",
   "title": "Task card (agent-visible)",
   "type": "object",
   "required": [
@@ -11,17 +11,94 @@
     "tolerance_class",
     "budgets",
     "deliverables",
-    "tier"
+    "tier",
+    "input_kind"
   ],
   "properties": {
     "spec_version": {
-      "const": "0.1.0"
+      "const": "0.2.0"
     },
     "part_id": {
       "type": "string"
     },
     "input_stl": {
-      "type": "string"
+      "type": "string",
+      "description": "Path of the input mesh. For input_kind=scan this is the raw scan in the scanner frame (not aligned to part axes, not watertight in general)."
+    },
+    "input_kind": {
+      "enum": [
+        "scan",
+        "synthetic_clean",
+        "synthetic_degraded"
+      ],
+      "description": "scan = real 3D scan (primary, ADR 0002); synthetic_* = generated from the GT B-rep (calibration / evaluator tests only, never ranked)."
+    },
+    "scan": {
+      "type": "object",
+      "description": "Scan metadata, as a customer would supply it. Required when input_kind=scan.",
+      "required": [
+        "scanner",
+        "frame"
+      ],
+      "properties": {
+        "scanner": {
+          "type": "string",
+          "description": "e.g. 'Creality CR-Scan Raptor'"
+        },
+        "mode": {
+          "type": "string",
+          "description": "e.g. 'laser', 'blue light', 'NIR'"
+        },
+        "sessions": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "number of merged scan sessions"
+        },
+        "triangles": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "watertight": {
+          "type": "boolean"
+        },
+        "frame": {
+          "enum": [
+            "scanner",
+            "prealigned"
+          ],
+          "description": "scanner = arbitrary scanner frame (default; datum finding is part of the task)"
+        },
+        "known_defects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Free-text notes such as reflective holes or unreached regions"
+        }
+      }
+    },
+    "aux_inputs": {
+      "type": "array",
+      "description": "Optional extra inputs shown to the agent (ADR 0002). Empty in v1.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "calipers",
+              "photos",
+              "notes"
+            ]
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
     },
     "units": {
       "const": "mm"
@@ -79,5 +156,24 @@
     "instructions": {
       "type": "string"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "input_kind": {
+            "const": "scan"
+          }
+        },
+        "required": [
+          "input_kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "scan"
+        ]
+      }
+    }
+  ]
 }

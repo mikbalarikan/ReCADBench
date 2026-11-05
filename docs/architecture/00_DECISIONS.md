@@ -103,7 +103,7 @@ runs/<run_id>/
 
 ## D7. Ground-truth isolation by topology
 
-Workers clone/pull `recadbench-data` and receive only `input.stl` + `task.yaml` (Track T on dev parts: the orchestrator ships that part's `gt_plan.json` inside the job payload, never repo access to GT). Evaluator runs on one fixed host (ASUS) with the GT store mounted read-only. Agent self-checks use the **STL**; the evaluator scores geometry against **`gt.step`**.
+Workers clone/pull `recadbench-data` and receive only `input.stl` + `task.yaml` (Track T on dev parts: the orchestrator ships that part's `gt_plan.json` inside the job payload, never repo access to GT). Evaluator runs on one fixed host (ASUS) with the GT store mounted read-only. Agent self-checks use the **STL** (since ADR 0002: the raw scan); the evaluator scores geometry against **`gt.step`**, mapped through the stored scan→GT registration.
 
 Post-run extraction (`extract_features`, `export_step`, hashes) runs **on the worker** in a clean process after the session, because NX/Solidcraft/FreeCAD are not on the evaluator host. S5 `set_param` is a queue job to a host with that backend.
 
@@ -118,5 +118,25 @@ Post-run extraction (`extract_features`, `export_step`, hashes) runs **on the wo
 - Solidcraft = tangency-labs/solidcraft; early-stage, pin a release, rerun conformance on every bump.
 - build123d reference backend = pzfreo/build123d-mcp; Termux install via the method PoCAD already uses (P1 spike).
 - NX via journals: one NX licence ⇒ NX parallelism = 1 per host.
-- 50 parts, user-authored GT; 10 dev / 40 frozen test.
+- ~~50 parts, user-authored GT; 10 dev / 40 frozen test.~~ Superseded by D10: v1 is dev-only (scan-rebuild parts); the frozen test set waits for uncontaminated `print_scan` parts.
 - "Seed" = `replicate` index (Claude APIs have no seed parameter); 3 replicates per config × part.
+
+## D10. Input is a real 3D scan (ADR 0002, spec 0.2.0)
+
+The benchmark task is industrial reverse engineering: **raw scan STL (scanner frame, noisy, holed,
+partly unobserved) → clean parametric CAD/STEP recovering design intent.** `input.stl` is the scan
+itself, never a tessellation of `gt.step` (synthetic inputs remain only for calibration and evaluator
+tests, `input_kind: synthetic_*`, never ranked).
+
+| `source_kind` | Input | GT | Status |
+|---|---|---|---|
+| `scan_rebuild` | scan of a physical part | a reconstruction (R385: owner's NX rebuild; open-dedica: agent-made) | **v1 — dev only** |
+| `print_scan` | owner's scan of a print of an own design (OGUZ) | the original design CAD | later — the uncontaminated test set |
+| `synthetic` | generated from GT | exact | calibration only |
+
+- GT authoring adds **registration** (`T_scan_to_gt`), the **scan floor** (GT's own deviation from the scan)
+  and **observability** (GT surface covered by the scan) to `meta.yaml`.
+- `meta.yaml` records `gt_author` and `contamination`; the validator refuses `split: test` for contaminated
+  parts, agent-made GT or synthetic inputs. Agent-made GT (open-dedica) is circular for this benchmark and
+  stays dev/calibration until the owner reviews it.
+- **v1 therefore has no frozen test split and no public leaderboard.**
