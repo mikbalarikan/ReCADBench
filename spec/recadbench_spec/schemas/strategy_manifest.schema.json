@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/strategy_manifest/0.1.0",
+  "title": "strategy.yaml",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "playbook",
+    "stages",
+    "toolkit_tools",
+    "skill"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^(oracle|[A-Z])$",
+      "description": "Equals the folder name under strategies/"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "playbook": {
+      "type": "string"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "toolkit_tools": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "mesh_stats",
+          "slice",
+          "fit_primitives",
+          "detect_holes",
+          "snap_nominal",
+          "self_deviation",
+          "render"
+        ]
+      }
+    },
+    "max_refine_iters": {
+      "type": "integer"
+    },
+    "feature_budget_policy": {
+      "enum": [
+        "none",
+        "soft",
+        "hard"
+      ]
+    },
+    "snap_policy": {
+      "type": "object",
+      "properties": {
+        "A": {
+          "type": "number"
+        },
+        "B": {
+          "type": "number"
+        },
+        "C": {
+          "type": "number"
+        }
+      }
+    },
+    "vision": {
+      "type": "boolean"
+    },
+    "inject_gt_plan": {
+      "type": "boolean",
+      "description": "true only for oracle"
+    },
+    "skill": {
+      "type": "string",
+      "description": "Path to skills/SKILL.md"
+    }
+  }
+}

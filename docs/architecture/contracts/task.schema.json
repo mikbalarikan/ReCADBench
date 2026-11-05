@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/task/0.1.0",
+  "title": "Task card (agent-visible)",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "part_id",
+    "input_stl",
+    "units",
+    "tolerance_class",
+    "budgets",
+    "deliverables",
+    "tier"
+  ],
+  "properties": {
+    "spec_version": {
+      "const": "0.1.0"
+    },
+    "part_id": {
+      "type": "string"
+    },
+    "input_stl": {
+      "type": "string"
+    },
+    "units": {
+      "const": "mm"
+    },
+    "tolerance_class": {
+      "enum": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "tier": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "feature_budget_hint": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Populated only when run_manifest.harness_level permits (H-hint); null by default. Never shown in test-split Track E unless the experiment declares it."
+    },
+    "budgets": {
+      "type": "object",
+      "required": [
+        "max_wall_s",
+        "max_turns"
+      ],
+      "properties": {
+        "max_wall_s": {
+          "type": "integer"
+        },
+        "max_turns": {
+          "type": "integer"
+        },
+        "max_tokens": {
+          "type": "integer"
+        }
+      },
+      "description": "Defaults; run_manifest.budgets overrides."
+    },
+    "deliverables": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "out/output.step",
+          "cad/native",
+          "plan/re_plan.vN.json"
+        ]
+      }
+    },
+    "instructions": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/run_manifest/0.1.0",
+  "title": "Run manifest",
+  "type": "object",
+  "required": [
+    "run_id",
+    "track",
+    "part_id",
+    "replicate",
+    "strategy",
+    "model",
+    "spec_version",
+    "budgets",
+    "harness_level",
+    "backend",
+    "skillset"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "track": {
+      "enum": [
+        "T",
+        "S",
+        "E"
+      ]
+    },
+    "part_id": {
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "dev",
+        "test"
+      ]
+    },
+    "strategy": {
+      "type": "object",
+      "required": [
+        "id",
+        "git_sha"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "git_sha": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "id",
+        "provider"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "max_output_tokens": {
+          "type": "integer"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      }
+    },
+    "agent_backend": {
+      "enum": [
+        "claude_agent_sdk",
+        "litellm_loop"
+      ]
+    },
+    "spec_version": {
+      "type": "string"
+    },
+    "evaluator_version": {
+      "type": "string"
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "max_wall_s": {
+          "type": "integer"
+        },
+        "max_turns": {
+          "type": "integer"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "max_cost_usd": {
+          "type": "number"
+        }
+      },
+      "description": "Overrides task.yaml budgets"
+    },
+    "worker_host": {
+      "type": "string"
+    },
+    "replicate": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "harness_level": {
+      "enum": [
+        "H0",
+        "H1",
+        "H2",
+        "H3"
+      ],
+      "description": "H0 one-shot, H1 iterative self-check, H2 +vision, H3 +full RE toolkit; see 04_STRATEGIES / 01_ARCHITECTURE"
+    },
+    "feature_budget_hint": {
+      "type": "boolean",
+      "default": false
+    },
+    "backend": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "nx",
+            "build123d",
+            "solidcraft",
+            "freecad",
+            "none"
+          ]
+        },
+        "software_version": {
+          "type": "string"
+        },
+        "backend_sha": {
+          "type": "string"
+        }
+      }
+    },
+    "skillset": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "'<backend>@vN' or 'none'"
+        },
+        "git_sha": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "track": {
+            "const": "T"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "strategy": {
+            "properties": {
+              "id": {
+                "const": "oracle"
+              }
+            }
+          },
+          "split": {
+            "const": "dev"
+          },
+          "backend": {
+            "properties": {
+              "id": {
+                "not": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "track": {
+            "const": "S"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "properties": {
+              "id": {
+                "const": "none"
+              }
+            }
+          },
+          "skillset": {
+            "properties": {
+              "id": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "track": {
+            "const": "E"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "strategy": {
+            "properties": {
+              "id": {
+                "not": {
+                  "const": "oracle"
+                }
+              }
+            }
+          },
+          "backend": {
+            "properties": {
+              "id": {
+                "not": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

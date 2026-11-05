@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/key_dims/0.1.0",
+  "title": "key_dims.yaml (GT, private)",
+  "type": "object",
+  "required": [
+    "part_id",
+    "dims"
+  ],
+  "properties": {
+    "part_id": {
+      "type": "string"
+    },
+    "dims": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "nominal",
+          "measure"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "kind": {
+            "enum": [
+              "diameter",
+              "radius",
+              "face_distance",
+              "axis_distance",
+              "axis_to_face",
+              "angle",
+              "depth"
+            ]
+          },
+          "nominal": {
+            "type": "number"
+          },
+          "standard": {
+            "type": "boolean",
+            "default": false,
+            "description": "GT value is a standard/preferred value (S3 standard credit only for these)"
+          },
+          "measure": {
+            "type": "object",
+            "description": "How to find it on any candidate after alignment",
+            "properties": {
+              "face_type": {
+                "enum": [
+                  "plane",
+                  "cylinder",
+                  "cone",
+                  "sphere",
+                  "torus"
+                ]
+              },
+              "near_point": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "axis_dir": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "second": {
+                "type": "object"
+              }
+            }
+          },
+          "editable": {
+            "type": "boolean",
+            "default": false,
+            "description": "Used for S5 set_param test"
+          }
+        }
+      }
+    }
+  }
+}
