@@ -4,4 +4,4 @@
 
 **Filled by:** P1 (copy); P2 (models + validation built on them) (see `recadbench/docs/architecture/`06_SESSION_PROMPTS.md).
 
-Scaffolded in P1; no logic yet.
+Changes since the P1 copy: [ADR 0001](../../../docs/adr/0001-ir-params-anyof.md).

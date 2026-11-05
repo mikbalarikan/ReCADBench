@@ -1,0 +1,25 @@
+id: build123d
+software:
+  name: build123d-mcp
+  version: 0.3.91
+  source: pypi:build123d-mcp==0.3.91
+interface:
+  kind: mcp
+  mcp:
+    command: build123d-mcp
+    args: []
+hosts:
+- linux
+- termux
+adapter_cli:
+  export: recad build123d export
+  extract: recad build123d extract
+  set_param: recad build123d set-param
+  replay: recad build123d replay
+  execute_ir: recad build123d execute-ir
+max_parallel: 2
+conformance:
+  passed: 10
+  total: 10
+  date: '2026-11-05'
+  software_version: 0.3.91

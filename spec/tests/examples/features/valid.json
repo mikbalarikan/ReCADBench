@@ -1,0 +1,53 @@
+{
+  "tool": "build123d",
+  "native_file": "cad/part.py",
+  "count": 4,
+  "native_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "face_count": 30,
+  "unmapped": [],
+  "features": [
+    {
+      "native_name": "plane_D1",
+      "native_type": "Plane",
+      "taxonomy_type": "datum_plane",
+      "counted": false
+    },
+    {
+      "native_name": "sk1",
+      "native_type": "BuildSketch",
+      "taxonomy_type": "sketch",
+      "counted": false
+    },
+    {
+      "native_name": "body",
+      "native_type": "extrude",
+      "taxonomy_type": "extrude",
+      "counted": true,
+      "params": {
+        "amount": 8
+      }
+    },
+    {
+      "native_type": "CounterBoreHole",
+      "taxonomy_type": "hole",
+      "counted": true
+    },
+    {
+      "native_type": "GridLocations",
+      "taxonomy_type": "pattern_linear",
+      "counted": true
+    },
+    {
+      "native_type": "fillet",
+      "taxonomy_type": "fillet",
+      "counted": true
+    }
+  ],
+  "parameters": [
+    {
+      "name": "plate_t",
+      "value": 8,
+      "feature": "body"
+    }
+  ]
+}
