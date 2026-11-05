@@ -93,9 +93,15 @@ and re-import `1 11497.35` (= 40·30·10 − π·4²·10).
 | Where | Result |
 |---|---|
 | **x86_64 Ubuntu 24.04 (cloud container), steps 1–2 above with `linux-64` micromamba** | ✅ `pip check`: no broken requirements. MCP `version` → build123d-mcp 0.3.91 / build123d 0.10.0 / bd_warehouse 0.2.0. `execute` + `export format=step` → 20 kB STEP; re-import: 1 solid, volume 11497.35 mm³ (analytic 11497.35) |
-| **Android phone (Termux, aarch64)** | ⏳ **Not yet run** — the P1 session had no phone access. Run steps 0–2 on one phone and fill this row (phone model, Android, Termux version, wall time, outputs). |
+| **Android phone (Termux, aarch64)** — Xiaomi `23117RA68G`, Android 13, Termux 0.118.3 (F-Droid), kernel 5.10.168, proot-distro Ubuntu 26.04.1 (pre-installed by PoCAD) | ✅ **PASS.** Step 0: 17 s. Step 1: 568 s, exit 0, no pin failed on aarch64 (micromamba reused from PoCAD; `cad` env untouched); `pip check` clean; OCP loads from the conda `OCP.cpython-312-aarch64-linux-gnu.so` (ocp 7.8.1.1, python 3.12.15, vtk 9.3.1). Step 2: `version`/`execute`/`export` ok in 27 s → 20,211-byte STEP; re-import `1 11497.35` (9 s). Step 3 verified: a JSON-RPC stdio client in Termux Python launching `proot-distro login ubuntu -- /opt/mamba/envs/recad/bin/build123d-mcp` gets 48 tools, executes and exports (re-import `1 11497.35`, 22 s). Disk: 39 → 38 GB free. |
 
-Notes for the phone run:
+Notes from the phone run:
+- Run step 1 **once**. Two overlapping runs contend for `/opt/mamba/pkgs` (`Cannot lock`); it recovered here, but check `pip check` + the OCP import path if it happens.
+- `RuntimeWarning: invalid signal number 32` on stderr under proot is harmless.
+- `cadquery-ocp-proxy 7.9.3.1.1` gets installed (metadata-only proxy, no deps) on both x86 and aarch64; harmless.
+- Termux's own Python (3.14) has no `mcp` package; the MCP client side is Claude Code itself, so that doesn't matter.
+
+Earlier notes:
 - All aarch64 pip wheels needed exist on PyPI (checked: quiddity, resvg-py, vtk); vtk itself comes from conda-forge with OCP.
 - Newer PyPI `cadquery-ocp(-novtk)` 7.9/8.0 now ship aarch64 wheels; a plain-pip route (build123d 0.13 + OCP 8.0, no shims) may work too. Not used: P1 follows the PoCAD method. Revisit in P3 when pinning.
 - micromamba: `micro.mamba.pm` was blocked in the cloud container; `https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-linux-aarch64` is an equivalent source (plain binary, `chmod +x`).
