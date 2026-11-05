@@ -1,6 +1,17 @@
-spec_version: 0.1.0
+spec_version: 0.2.0
 part_id: synthetic_plate_01
 input_stl: input/input.stl
+input_kind: scan
+scan:
+  scanner: Creality CR-Scan Raptor
+  mode: laser
+  sessions: 2
+  triangles: 363988
+  watertight: false
+  frame: scanner
+  known_defects:
+  - reflective holes on chrome cap
+  - deep bore not reached
 units: inch
 tolerance_class: B
 tier: 1

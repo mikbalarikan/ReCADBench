@@ -1,4 +1,4 @@
-# Canonical feature taxonomy + counting rule. spec v0.1.0
+# Canonical feature taxonomy + counting rule. spec v0.2.0 (unchanged since 0.1.0)
 # Every tool adapter maps native feature types to these keys.
 # Counting: each item below counts as 1 feature per native command, regardless of how many
 # edges/faces/instances it touches. A pattern/mirror counts 1 (its seed feature counts separately).

@@ -337,6 +337,8 @@ def _sem_task(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
         s.error("/deliverables", f"duplicate deliverable {d!r}")
     if not doc["input_stl"].lower().endswith(".stl"):
         s.error("/input_stl", "must be an .stl path")
+    if doc["input_kind"] != "scan" and "scan" in doc:
+        s.error("/scan", f"scan metadata given for input_kind={doc['input_kind']!r}")
     for key in ("max_wall_s", "max_turns", "max_tokens"):
         if key in doc["budgets"] and doc["budgets"][key] <= 0:
             s.error(f"/budgets/{key}", "must be positive")
@@ -366,6 +368,57 @@ def _sem_gt_meta(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
             s.error(f"/{key}", "out of range")
     if (chord := doc.get("tessellation_chord_mm")) is not None and chord <= 0:
         s.error("/tessellation_chord_mm", "must be positive")
+
+    # ADR 0002: scan inputs, provenance, registration
+    synthetic = doc["source_kind"] == "synthetic"
+    if not synthetic and "tessellation_chord_mm" in doc:
+        s.warn("/tessellation_chord_mm", "only used for source_kind=synthetic")
+    if synthetic and "registration" in doc:
+        s.warn("/registration", "ignored for source_kind=synthetic")
+    if reg := doc.get("registration"):
+        for msg in _rigid_problems(reg["T_scan_to_gt"]):
+            s.error("/registration/T_scan_to_gt", msg)
+        if not reg["converged"]:
+            s.error("/registration/converged", "registration did not converge")
+    if floor := doc.get("scan_floor"):
+        for key, val in floor.items():
+            if isinstance(val, (int, float)) and val < 0:
+                s.error(f"/scan_floor/{key}", "must be ≥ 0")
+    if (obs := doc.get("observability")) and obs["threshold_mm"] <= 0:
+        s.error("/observability/threshold_mm", "must be positive")
+    if doc["split"] == "test":
+        c = doc["contamination"]
+        if c["public_scan"] or c["public_cad"] or c["commercial_replica"]:
+            s.error(
+                "/split",
+                "contaminated parts (public scan/CAD or commercial replica) may not be in test",
+            )
+        if doc["gt_author"] == "agent":
+            s.error("/split", "agent-made GT must be human-reviewed before it can be in test")
+        if synthetic:
+            s.error("/split", "synthetic inputs are calibration only, never test")
+
+
+def _rigid_problems(T: list[list[float]], tol: float = 1e-4) -> list[str]:
+    """Problems with a 4×4 homogeneous rigid transform (rotation + translation, no scale)."""
+    problems = []
+    if [round(v, 9) for v in T[3]] != [0, 0, 0, 1]:
+        problems.append("last row must be [0, 0, 0, 1]")
+    R = [row[:3] for row in T[:3]]
+    for i in range(3):
+        for j in range(3):
+            dot = sum(R[k][i] * R[k][j] for k in range(3))
+            if abs(dot - (1.0 if i == j else 0.0)) > tol:
+                problems.append("rotation part is not orthonormal (scale or shear present)")
+                return problems
+    det = (
+        R[0][0] * (R[1][1] * R[2][2] - R[1][2] * R[2][1])
+        - R[0][1] * (R[1][0] * R[2][2] - R[1][2] * R[2][0])
+        + R[0][2] * (R[1][0] * R[2][1] - R[1][1] * R[2][0])
+    )
+    if det < 0:
+        problems.append("rotation part is a reflection (det < 0)")
+    return problems
 
 
 def _sem_features(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
@@ -467,7 +520,15 @@ def _sem_result(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
     if doc["pass"] and not doc["gate"]["ok"]:
         s.error("/pass", "pass=true with a failed gate")
     for key, val in (doc.get("metrics") or {}).items():
-        if key in ("p_tight", "p_wide", "key_dims_ok", "param_coverage") and not 0 <= val <= 1:
+        fractions = (
+            "p_tight",
+            "p_wide",
+            "p_tight_inferred",
+            "p_wide_inferred",
+            "key_dims_ok",
+            "param_coverage",
+        )
+        if key in fractions and not 0 <= val <= 1:
             s.error(f"/metrics/{key}", "fraction must be within [0, 1]")
     if doc["track"] == "S" and doc["scores"].get("plan_score") is None:
         s.warn("/scores/plan_score", "Track S results are expected to carry plan_score")

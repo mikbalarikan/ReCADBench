@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/gt_meta/0.1.0",
+  "$id": "recadbench/gt_meta/0.2.0",
   "title": "meta.yaml (GT, private)",
   "type": "object",
   "required": [
@@ -11,7 +11,10 @@
     "faces_gt",
     "face_types",
     "b1",
-    "split"
+    "split",
+    "source_kind",
+    "gt_author",
+    "contamination"
   ],
   "properties": {
     "part_id": {
@@ -63,10 +66,201 @@
     },
     "tessellation_chord_mm": {
       "type": "number",
-      "description": "Used by make_task; ≤ 1/3 of class tight band"
+      "description": "synthetic only: chord tolerance used by make_task; ≤ 1/3 of class tight band"
     },
     "notes": {
       "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "print_scan",
+        "scan_rebuild",
+        "synthetic"
+      ],
+      "description": "print_scan = scan of a print of the original design (GT = design CAD); scan_rebuild = scan of a physical part, GT = a reconstruction; synthetic = input generated from the GT B-rep (ADR 0002)"
+    },
+    "gt_author": {
+      "enum": [
+        "human",
+        "agent",
+        "agent_human_reviewed"
+      ],
+      "description": "Who made gt.step. 'agent' GT (e.g. open-dedica deliveries) is dev/calibration only until a human reviews it."
+    },
+    "contamination": {
+      "type": "object",
+      "required": [
+        "public_scan",
+        "public_cad",
+        "commercial_replica"
+      ],
+      "description": "Any true ⇒ the part may not be in the test split.",
+      "properties": {
+        "public_scan": {
+          "type": "boolean"
+        },
+        "public_cad": {
+          "type": "boolean",
+          "description": "this GT, or CAD of the same product, is public"
+        },
+        "commercial_replica": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "scan": {
+      "type": "object",
+      "description": "The raw scan that becomes input.stl (required unless source_kind=synthetic).",
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "scan file name in this GT folder (copied byte-identical to recadbench-data as input.stl)"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "scanner": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "sessions": {
+          "type": "integer"
+        },
+        "date": {
+          "type": "string"
+        },
+        "triangles": {
+          "type": "integer"
+        },
+        "known_defects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "description": "Rigid transform mapping scan-frame points into the gt.step frame: x_gt = T · x_scan (required unless synthetic).",
+      "required": [
+        "T_scan_to_gt",
+        "method",
+        "rmse_mm",
+        "converged"
+      ],
+      "properties": {
+        "T_scan_to_gt": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        },
+        "method": {
+          "type": "string",
+          "description": "e.g. 'alignment.json + point-to-point ICP (masked)'"
+        },
+        "rmse_mm": {
+          "type": "number"
+        },
+        "converged": {
+          "type": "boolean"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "iterations": {
+          "type": "integer"
+        }
+      }
+    },
+    "scan_floor": {
+      "type": "object",
+      "description": "Deviation of gt.step itself from the registered scan: the noise floor no agent can beat (required unless synthetic). Scoring bands are widened relative to it (03_SCORING).",
+      "required": [
+        "scan_to_gt_p95_mm",
+        "gt_to_scan_observable_p95_mm"
+      ],
+      "properties": {
+        "scan_to_gt_p50_mm": {
+          "type": "number"
+        },
+        "scan_to_gt_p95_mm": {
+          "type": "number"
+        },
+        "gt_to_scan_observable_p95_mm": {
+          "type": "number"
+        },
+        "max_mm": {
+          "type": "number"
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "description": "Share of the GT surface the scan actually covers (required unless synthetic). Unobserved GT regions are scored separately as 'inferred'.",
+      "required": [
+        "observable_fraction",
+        "threshold_mm"
+      ],
+      "properties": {
+        "observable_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "threshold_mm": {
+          "type": "number",
+          "description": "GT surface point is observable if a scan point lies within this distance (and faces the same way)"
+        },
+        "mask_file": {
+          "type": "string",
+          "description": "optional per-face/point mask file in this GT folder"
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_kind": {
+            "const": "synthetic"
+          }
+        },
+        "required": [
+          "source_kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "tessellation_chord_mm"
+        ]
+      },
+      "else": {
+        "required": [
+          "scan",
+          "registration",
+          "scan_floor",
+          "observability"
+        ]
+      }
+    }
+  ]
 }

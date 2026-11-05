@@ -3,10 +3,10 @@
 | Milestone | Prompts | Exit criteria |
 |---|---|---|
 | **M1 Skeleton** | P1, P2 | 5 repos scaffolded, public-repo data guard in CI, CI green, Termux spike done (build123d-mcp exports STEP on a phone), `recadbench-spec` v0.1.0 |
-| **M2 Backends + measurement** | P3, P4, P5, P6, P7 | build123d, Solidcraft, FreeCAD, NX pass conformance with identical counts; NX harness ported (nx-v1); retk works on Termux; 3 pilot GT parts; evaluator golden tests green |
+| **M2 Backends + measurement** | P3, P4, P5, P6, P7 | build123d, Solidcraft, FreeCAD, NX pass conformance with identical counts; NX harness ported (nx-v1); retk works on Termux; 3 pilot GT parts (R385 scan-rebuild, registered, floor + observability); evaluator golden tests green |
 | **M3 Pilot + calibration** | P8, P9, P10, P11 | Skillsets v1 for all 4 backends; strategies A–D; compose + gate_hook working; pilot memo + threshold ADR; spec v1.0.0 |
 | **M4 Dev campaigns** | P12 (repeat) | Track T on 10 dev parts: all backends × {none, latest} × all models × 3 replicates; ≥1 skillset improvement cycle per backend; Track S plan-only on dev |
-| **M5 Frozen test + S5** | — | 50 GT parts done; S5 on; Track E on 40 test parts; leaderboard with CIs per layer |
+| **M5 Frozen test + S5** | — | Uncontaminated `print_scan` parts (OGUZ, owner prints + scans) form the frozen test set (ADR 0002); S5 on; Track E on test; leaderboard with CIs per layer. Until then all results are dev-only |
 
 ## Staged experiment budget
 

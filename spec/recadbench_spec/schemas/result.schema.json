@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/result/0.1.0",
+  "$id": "recadbench/result/0.2.0",
   "title": "Evaluation result",
   "type": "object",
   "required": [
@@ -58,10 +58,12 @@
       "type": "object",
       "properties": {
         "p_tight": {
-          "type": "number"
+          "type": "number",
+          "description": "Share within the effective tight band, on the OBSERVABLE GT region (ADR 0002)"
         },
         "p_wide": {
-          "type": "number"
+          "type": "number",
+          "description": "Share within the effective wide band, on the observable GT region"
         },
         "mean": {
           "type": "number"
@@ -101,6 +103,20 @@
         },
         "b1_match": {
           "type": "boolean"
+        },
+        "p_tight_inferred": {
+          "type": "number",
+          "description": "Same on the GT region the scan did not cover (reported; not scored in v1)"
+        },
+        "p_wide_inferred": {
+          "type": "number"
+        },
+        "band_tight_eff_mm": {
+          "type": "number",
+          "description": "max(class tight band, k·scan_floor p95)"
+        },
+        "band_wide_eff_mm": {
+          "type": "number"
         }
       }
     },
