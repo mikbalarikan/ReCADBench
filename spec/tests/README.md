@@ -4,4 +4,4 @@
 
 **Filled by:** P2 (see `recadbench/docs/architecture/06_SESSION_PROMPTS.md`).
 
-Scaffolded in P1; no logic yet.
+`examples/<schema>/` = 1 `valid` + ≥2 `invalid_*` synthetic documents per schema; see `spec/README.md`.

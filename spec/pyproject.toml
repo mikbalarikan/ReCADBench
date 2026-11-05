@@ -4,10 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recadbench-spec"
-version = "0.0.0"
-description = "ReCADBench contracts: JSON Schemas, feature taxonomy, models, validate CLI"
+version = "0.1.0"
+description = "ReCADBench contracts: JSON Schemas, feature taxonomy, pydantic models, validate CLI"
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []  # P1 stub: real dependencies added by the implementing prompt
+dependencies = [
+  "pydantic>=2.6,<3",
+  "jsonschema>=4.21,<5",
+  "pyyaml>=6",
+]
+
+[project.scripts]
+recadbench-spec = "recadbench_spec.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["recadbench_spec*"]

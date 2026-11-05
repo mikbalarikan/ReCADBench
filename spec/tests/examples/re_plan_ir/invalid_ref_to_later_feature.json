@@ -1,0 +1,188 @@
+{
+  "spec_version": "0.1.0",
+  "part_id": "synthetic_plate_01",
+  "revision": 2,
+  "units": "mm",
+  "part_family": "flat mounting plate",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "largest planar face (bottom)"
+    },
+    {
+      "id": "D2",
+      "role": "secondary",
+      "kind": "axis",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "basis": "central bore axis"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "plate_t",
+      "value": 8
+    },
+    {
+      "name": "hole_d",
+      "value": 6.6,
+      "measured": 6.62,
+      "snap_source": "ISO 273 medium clearance M6"
+    },
+    {
+      "name": "corner_r",
+      "value": 5
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "D1",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              0,
+              0
+            ],
+            "width": 80,
+            "height": 60
+          }
+        ],
+        "constraints": [
+          "symmetric about x",
+          "symmetric about y"
+        ]
+      },
+      "params": {
+        "distance": {
+          "ref": "plate_t"
+        },
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      },
+      "evidence": {
+        "source": "fit_primitives",
+        "inlier_pct": 99.2,
+        "residual_mm": 0.02,
+        "region_id": "R1"
+      }
+    },
+    {
+      "id": "F2",
+      "type": "hole",
+      "operation": "cut",
+      "params": {
+        "diameter": {
+          "ref": "hole_d"
+        },
+        "through": true,
+        "kind": "counterbore",
+        "cb_diameter": 11,
+        "cb_depth": 6.4,
+        "positions": [
+          [
+            30,
+            20,
+            8
+          ]
+        ]
+      },
+      "refs": [
+        "F4:plane:+Z:max"
+      ],
+      "evidence": {
+        "source": "detect_holes",
+        "residual_mm": 0.03
+      }
+    },
+    {
+      "id": "F3",
+      "type": "pattern_linear",
+      "params": {
+        "features": [
+          "F2"
+        ],
+        "direction": [
+          -1,
+          0,
+          0
+        ],
+        "count": 2,
+        "spacing": 60,
+        "direction2": [
+          0,
+          -1,
+          0
+        ],
+        "count2": 2,
+        "spacing2": 40
+      }
+    },
+    {
+      "id": "F4",
+      "type": "fillet",
+      "params": {
+        "radius": {
+          "ref": "corner_r"
+        },
+        "edges": "F1:edges:outer"
+      }
+    }
+  ],
+  "change_log": [
+    "v2: hole \u00d8 snapped 6.62 \u2192 6.6 (ISO 273 M6 medium) after detect_holes on region R3"
+  ],
+  "reference_planes": [
+    {
+      "id": "P_mid",
+      "origin": [
+        0,
+        0,
+        4
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "mid-thickness"
+    }
+  ]
+}

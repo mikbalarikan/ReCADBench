@@ -1,0 +1,27 @@
+id: B
+name: Datum-first feature recognition
+version: '1'
+playbook: playbook.md
+stages:
+- intake
+- analyze
+- datum
+- plan
+- execute
+- verify
+toolkit_tools:
+- mesh_stats
+- slice
+- fit_primitives
+- detect_holes
+- snap_nominal
+- self_deviation
+max_refine_iters: 3
+feature_budget_policy: soft
+snap_policy:
+  A: 0.02
+  B: 0.05
+  C: 0.15
+vision: false
+inject_gt_plan: false
+skill: skills/SKILL.md
