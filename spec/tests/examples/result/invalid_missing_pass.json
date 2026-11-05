@@ -1,0 +1,66 @@
+{
+  "run_id": "T_oracle_nx-v1_p001_r0",
+  "gate": {
+    "ok": true,
+    "faces_pred": 31,
+    "faces_gt": 30
+  },
+  "alignment": {
+    "rmse": 0.01,
+    "datum_offset_mm": 0.0,
+    "datum_offset_deg": 0.0
+  },
+  "metrics": {
+    "p_tight": 0.97,
+    "p_wide": 0.995,
+    "mean": 0.02,
+    "rms": 0.03,
+    "p95": 0.06,
+    "max": 0.2,
+    "hausdorff": 0.2,
+    "r_feat": 1.0,
+    "key_dims_ok": 1.0,
+    "b1_match": true
+  },
+  "scores": {
+    "S1": 38.5,
+    "S2": 25,
+    "S3": 20,
+    "S4": 10,
+    "S5": null,
+    "total": 93.5,
+    "capped": false,
+    "plan_score": null
+  },
+  "efficiency": {
+    "tokens_in": 120000,
+    "tokens_out": 9000,
+    "cost_usd": 0.6,
+    "wall_s": 412.0,
+    "turns": 37,
+    "tool_errors": 1
+  },
+  "versions": {
+    "spec": "0.1.0",
+    "evaluator": "0.0.0"
+  },
+  "track": "T",
+  "part_id": "p001",
+  "replicate": 0,
+  "strategy": {
+    "id": "oracle",
+    "git_sha": "abc1234"
+  },
+  "model": {
+    "id": "claude-sonnet-5-5",
+    "provider": "anthropic"
+  },
+  "backend": {
+    "id": "nx",
+    "software_version": "2312"
+  },
+  "skillset": {
+    "id": "nx@v1",
+    "git_sha": "def5678"
+  }
+}

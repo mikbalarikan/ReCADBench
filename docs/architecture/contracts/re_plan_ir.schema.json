@@ -181,7 +181,7 @@
             "type": "object",
             "description": "Allowed keys per type in feature_taxonomy.yaml (checked by recadbench-spec). Values: number, string, vec3, or {\"ref\": parameter_name}.",
             "additionalProperties": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "number"
                 },

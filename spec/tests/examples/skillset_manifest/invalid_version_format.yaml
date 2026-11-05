@@ -1,0 +1,17 @@
+id: nx
+version: '1.0'
+backend:
+  id: nx
+  software_versions: '>=2312'
+skills:
+- skills/nx-modeling
+- skills/nx-debugging
+agents:
+- agents/nx-journal-writer.md
+- agents/nx-reviewer.md
+lib:
+- lib/nxhelpers
+shared:
+- _shared/ir_execution.md
+- _shared/single_solid_rules.md
+changelog: 'v1: port of the existing NX harness'

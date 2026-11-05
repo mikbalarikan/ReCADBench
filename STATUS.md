@@ -6,7 +6,7 @@ Update at the end of every session.
 | Prompt | Scope in this repo | State |
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | partial — phone spike pending |
-| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | todo |
+| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — tag `spec-v0.1.0` pending merge |
 | P3 | Backends build123d / solidcraft / freecad + conformance suite | todo |
 | P4 | NX backend (runner, adapter, replays) | todo |
 | P6 | dataset/tools/make_task.py | todo |
@@ -16,10 +16,26 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-05 — P2: recadbench-spec 0.1.0 — pydantic models for all 10 schemas, taxonomy loader + counting rule, taxonomy-compiled IR schema (type enum, per-type params, needs_sketch), semantic rules, `recadbench-spec validate|schemas|taxonomy|compile-schema`, 101 tests (1 valid + 2 invalid examples per schema, round-trip, model↔schema drift). ADR 0001 fixes the IR `params` oneOf bug.
 - 2026-11-05 — P1 Termux spike: PoCAD-method recipe + build123d-mcp 0.3.91 verified on x86_64 Ubuntu 24.04 (STEP export via MCP OK). Phone run still pending.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From P2 (spec)
+- **Sketch dimensions can't be parameters.** IR sketch entities (`rect.width`, `circle.radius`, …) take plain
+  numbers; only feature `params` accept `{"ref": name}`. So a plate's width/height can't be named
+  parameters, which limits S5 (`set_param`) to non-sketch dims, and the "unused parameter" warning fires
+  for GT authors who declare them. Allow `{"ref"}` in sketch numbers? (schema change → ADR, spec 0.2.0)
+- **Param values are untyped.** The taxonomy lists param *names* per type but not their types, so
+  `radius: [1, 2, 3, 4]` or `count: "two"` pass. Add `params: {name: type}` to the taxonomy so the
+  compiled schema can type-check? (taxonomy change → ADR)
+- **Semantic rules are stricter than the schemas** in a few places (listed in `spec/README.md`), e.g.
+  Track T requires `split: dev` (the schema only checks it when present), and refs must point to
+  *earlier* features. Confirm these match intent.
+- `docs/architecture/contracts/` mirrors `spec/` by hand; keep or drop the mirror?
+
+### From P1
 - **Termux phone spike not executed.** The P1 session ran in a cloud container without access to any phone.
   The PoCAD-method recipe was verified end-to-end on x86_64 Ubuntu 24.04 (build123d-mcp 0.3.91 exports a valid
   STEP via MCP; see `backends/build123d/install.md`). Still needed for the M1 exit criterion: run
