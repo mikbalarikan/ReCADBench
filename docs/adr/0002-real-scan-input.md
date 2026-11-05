@@ -91,8 +91,30 @@ tasks.
 - **Docs updated**: 00_DECISIONS (D7, D9, new D10), 01_ARCHITECTURE (data flow), 02_REPO_LAYOUTS
   (data + GT folders), 03_SCORING (S1), 06_SESSION_PROMPTS (P6, P7), 07_ROADMAP.
 
-## Defaults recorded (owner may revise)
+## Owner decisions (2026-11-05)
 
-- open-dedica parts: dev/calibration only until the owner reviews each STEP.
-- `agentic_STL-to-CAD` golden examples: excluded until the owner clears their provenance.
+- **`agentic_STL-to-CAD` golden examples: cleared for use** (owner). They join the v1 dev pool.
+- **open-dedica: kept aside for now.** Not in the v1 dataset. Later, once benchmark agents produce
+  lower-deviation rebuilds, the best rebuild per part can be reviewed and kept as a calibrated
+  reference STEP (`gt_author: agent_human_reviewed`, still dev/calibration because scan and CAD are
+  public).
 - R385: dev only (commercial replica, public RS-385 CAD exists).
+
+## v1 dev pool (scan_rebuild, all dev)
+
+| Part(s) | Scan | GT | `gt_author` | Contamination | Notes |
+|---|---|---|---|---|---|
+| R385 ×8 (HS01–HS04, SL01–SL03, DR02) | owner's, private | owner's NX `.prt` + `.stp` | `human` | `commercial_replica` | pilots for P6; frames/scans being checked on the desktop |
+| OOM-B02 side brush | original full-res on Drive (repo has a cleaned mesh) | build123d + NX, verdict APPROVED | `agent_human_reviewed` | `commercial_replica` | |
+| OOM-P03 mop-pad bracket | full-res on Drive (repo: decimated) | build123d + NX, APPROVED | `agent_human_reviewed` | `commercial_replica` | |
+| Dreame screw cap, snap cap | full-res on Drive (repo: decimated) | build123d + NX, gates PASS | `agent_human_reviewed` | `commercial_replica` | 2 parts |
+| OD-H12 Dedica/ULKA pump | same scan as open-dedica OD-H01 (**public**) | build123d + NX, band not met (p95 0.448) | `agent_human_reviewed` | `public_scan`, `commercial_replica` | calibration-grade only |
+| M02-02-03 compound gear | `M02-02-03.STL` (179k faces, not watertight) | build123d `model.py` | `agent_human_reviewed` | to confirm | provenance of the mesh to confirm |
+| OOM-E01 battery | — | — | — | — | stub, excluded |
+
+Caveat: the `stl-re-*` skills were distilled from these golden projects, so a strategy/skillset ported
+from them (P8/P9) has seen these parts. That is acceptable for dev, and it is another reason none of
+them may ever enter `test`.
+
+Official inputs must be the **original full-resolution scans** from Drive (`MANIFEST.json
+source_path`), never the `*_scan_decimated.stl` inspection copies.

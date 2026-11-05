@@ -25,8 +25,9 @@ Update at the end of every session.
 ## Open questions
 
 ### From ADR 0002 (real scans)
-- **open-dedica GT** (agent-made) is dev/calibration only until the owner reviews each STEP — confirm, or mark parts `agent_human_reviewed` as you review them.
-- **agentic_STL-to-CAD golden examples** (M02, OD-H12, OOM-B02, OOM-P03, Dreame): own or client? Excluded until cleared.
+- Decided: golden examples **cleared** (v1 dev pool, ADR 0002 table); **open-dedica kept aside** (later: calibrated reference STEPs once agent rebuilds deviate less).
+- M02-02-03 gear: is `M02-02-03.STL` a real scan? (provenance of the mesh)
+- Full-res originals of the golden-example scans are on Drive (`H:\My Drive\…`, see each MANIFEST.json `source_path`) — P6 must use those, not the decimated copies.
 - **Scan storage** for recadbench-data (18–50 MB each): Git LFS vs Drive — decide in P6.
 - **`k` for the scan-floor band widening** (1.5 provisional) and the observability threshold — calibrate in P11.
 - **recadbench-data / recadbench-gt READMEs** still describe tessellated inputs — update in P6.
