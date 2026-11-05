@@ -1,0 +1,17 @@
+spec_version: 0.1.0
+part_id: synthetic_plate_01
+input_stl: input/input.stl
+units: mm
+tolerance_class: B
+tier: 1
+feature_budget_hint: null
+budgets:
+  max_wall_s: 3600
+  max_turns: 200
+  max_tokens: 2000000
+deliverables:
+- out/output.step
+- cad/native
+- plan/re_plan.vN.json
+- out/output.step
+instructions: Reverse-engineer input.stl into a single parametric solid.

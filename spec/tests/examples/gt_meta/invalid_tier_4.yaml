@@ -1,0 +1,13 @@
+part_id: synthetic_plate_01
+tolerance_class: B
+tier: 4
+split: dev
+n_ref: 4
+faces_gt: 30
+face_types:
+  plane: 0.82
+  cylinder: 0.18
+b1: 4
+family: plate
+source: synthetic example (spec test fixture)
+tessellation_chord_mm: 0.03

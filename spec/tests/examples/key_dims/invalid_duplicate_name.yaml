@@ -1,0 +1,45 @@
+part_id: synthetic_plate_01
+dims:
+- name: hole_d
+  kind: diameter
+  nominal: 6.6
+  standard: true
+  measure:
+    face_type: cylinder
+    near_point:
+    - 30
+    - 20
+    - 4
+    axis_dir:
+    - 0
+    - 0
+    - 1
+  editable: true
+- name: plate_t
+  kind: face_distance
+  nominal: 8
+  measure:
+    face_type: plane
+    near_point:
+    - 0
+    - 0
+    - 8
+    second:
+      near_point:
+      - 0
+      - 0
+      - 0
+- name: hole_d
+  kind: axis_distance
+  nominal: 60
+  measure:
+    face_type: cylinder
+    near_point:
+    - 30
+    - 20
+    - 4
+    second:
+      near_point:
+      - -30
+      - 20
+      - 4

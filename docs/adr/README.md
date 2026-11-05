@@ -4,8 +4,9 @@
 
 **Filled by:** P2 (schema ADRs), P3 (FreeCAD MCP selection), P11 (threshold ADR); any later session (see `recadbench/docs/architecture/`06_SESSION_PROMPTS.md).
 
-**Expected contents:**
+**Index:**
 
-- `0001-….md`, `0002-….md`, …
+- [0001](0001-ir-params-anyof.md) — RE Plan IR `params` values: `oneOf` → `anyOf` (P2)
+- `0002-….md`, …
 
 Scaffolded in P1; no logic yet.

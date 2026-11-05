@@ -4,4 +4,4 @@
 
 **Filled by:** P1 (contracts copied), P2 (see `recadbench/docs/architecture/06_SESSION_PROMPTS.md`).
 
-Scaffolded in P1; no logic yet.
+Implemented in P2 (`models.py`, `taxonomy.py`, `validate.py`, `cli.py`); usage in `spec/README.md`.
