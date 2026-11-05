@@ -69,18 +69,26 @@ optional). Tests on synthetic meshes of known primitives.
 
 ### P6 — Dataset + GT tooling (`ReCADBench/dataset/tools`, `recadbench-data`, `recadbench-gt`)
 ```
-Implement dataset/tools/make_task.py: GT folder (gt.step, gt_plan.json, key_dims.yaml, meta.yaml)
-→ input.stl (chord tolerance from meta.yaml, ≤ 1/3 of class tight band) + task.yaml, written into
-recadbench-data (plus MANIFEST.json and splits). Write recadbench-gt/AUTHORING.md (gt_plan.json,
-key_dims.yaml, how to count n_ref). Create 3 pilot GT parts (one per tier, dev split) in
-recadbench-gt. No part data or GT ever enters the public ReCADBench repo.
+Read docs/adr/0002-real-scan-input.md first: inputs are REAL SCANS (spec 0.2.0).
+Implement dataset/tools/register_gt.py (GT-authoring, evaluator host): scan_raw.stl + gt.step
+(+ optional initial alignment, e.g. an open-dedica alignment.json or 3 picked point pairs) →
+masked ICP (fixed seed) → meta.yaml registration, scan_floor, observability. Reuse the ICP/mask
+approach of mikbalarikan/agentic_STL-to-CAD skills/stl-re-verify (port, don't import).
+Implement dataset/tools/make_task.py: GT folder → recadbench-data/parts/<id>/{input.stl
+(byte-identical copy of the scan), task.yaml (input_kind, scan metadata)} + MANIFEST.json and
+splits; synthetic mode (tessellate gt.step, chord ≤ 1/3 tight band) for calibration parts only.
+Decide Git LFS vs Drive for 18–50 MB scans. Write recadbench-gt/AUTHORING.md (gt_plan.json,
+key_dims.yaml, n_ref, registration, provenance/contamination fields). Create 3 pilot GT parts from
+the R385 scan-rebuild set (human NX GT, dev split) in recadbench-gt; validate every file with
+recadbench-spec. No part data, scan or GT ever enters the public ReCADBench repo.
 ```
 
 ### P7 — Evaluator (`recadbench/evaluator`)
 ```
-Implement recadbench-eval per 03_SCORING.md: gate (incl. unmapped ⇒ fail), align, S1 vs gt.step,
+Implement recadbench-eval per 03_SCORING.md (incl. the ADR 0002 scan rules: map by T_scan_to_gt,
+observable region, band_eff from the scan floor, inferred region reported): gate (incl. unmapped ⇒ fail), align, S1 vs gt.step,
 S2 (bounds + parametric presence), S3, S4, plan_score, score.py → result.json, markdown/CSV report.
-S5 behind a flag. Golden tests on the 3 pilot parts with hand-made candidates: good, lego,
+S5 behind a flag. Golden tests on synthetic parts (public) and the 3 R385 pilot parts (evaluator host only) with hand-made candidates: good, lego,
 faceted, dumb_solid, wrong_dim (9.98 vs 10), snap_everything — assert ordering and PASS flags.
 Evaluator reads worker-produced features.json; never imports backend code.
 ```

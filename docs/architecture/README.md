@@ -31,4 +31,4 @@ A run is `strategy × skillset (→ backend) × model × part × replicate` — 
 3. Start a new session with all 5 repos attached and **Prompt P1** from `06_SESSION_PROMPTS.md` (scaffold all 5 repos).
 4. Continue with P2… in order. Each prompt is self-contained.
 
-Status: plan v4 (3-layer model, 1 public + 4 private repos), 2026-11-05.
+Status: plan v4 (3-layer model, 1 public + 4 private repos), 2026-11-05. **Amended by [ADR 0002](../adr/0002-real-scan-input.md): inputs are real 3D scans; see 00_DECISIONS D10.**

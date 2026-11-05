@@ -93,7 +93,7 @@ NX adapter = NX Open journals run through `run_journal.exe` (same mechanism as t
 | `self_deviation` | Candidate STEP vs **input STL**: two-way % within bands, P95, per-region summary |
 | `render` | Multi-view PNG (optional, H2) |
 
-`self_deviation` uses the same algorithm as S1 but against the STL; the evaluator samples `gt.step`. With `make_task` chord ≤ ⅓ tight band the self-check is a close proxy, not the score.
+`self_deviation` uses the same algorithm as S1 but against the STL — since ADR 0002 the raw scan; the evaluator samples `gt.step` (observable region, bands widened by the scan floor). The self-check is a proxy, not the score: it sees scan noise and holes, the score sees the GT.
 
 Overlap note: build123d-mcp has its own measure/compare/hole tools. They are L1 and stay available, but strategies must use `retk` for their analysis so strategy behavior is identical across backends.
 
