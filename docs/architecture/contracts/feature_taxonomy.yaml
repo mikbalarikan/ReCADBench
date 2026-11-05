@@ -1,0 +1,37 @@
+# Canonical feature taxonomy + counting rule. spec v0.1.0
+# Every tool adapter maps native feature types to these keys.
+# Counting: each item below counts as 1 feature per native command, regardless of how many
+# edges/faces/instances it touches. A pattern/mirror counts 1 (its seed feature counts separately).
+
+counting_rule:
+  counted: [primitive, extrude, revolve, sweep, loft, hole, fillet, chamfer, shell, draft, rib,
+            boolean, pattern_linear, pattern_circular, mirror, thread_cosmetic, freeform_region]
+  not_counted: [datum_plane, datum_axis, datum_point, sketch, parameter, transform, hide_show,
+                body_rename, export]
+  notes:
+    - "build123d: count by runtime trace of operation calls; a call inside a loop counts once per execution."
+    - "A boolean that only unites the result of a single feature into the body is part of that feature (not counted twice)."
+    - "Sketch-based features with multiple disjoint profiles in one command count 1."
+    - "Non-parametric bodies (dumb solids, raw kernel shapes, imported geometry) are NOT features: adapters report them as unmapped ⇒ gate fail."
+    - "Cross-tool consistency is enforced by the conformance suite: the same IR case must yield the same count in every tool."
+
+types:
+  primitive:      { params: [shape, size, center, axis], needs_sketch: false, note: "box/cylinder/sphere/cone/torus solid primitive (NX Block, build123d Box/Cylinder, Solidcraft primitives); counted 1 each" }
+  extrude:        { params: [distance, distance2, direction, taper_deg, symmetric], needs_sketch: true }
+  revolve:        { params: [angle_deg, axis], needs_sketch: true }
+  sweep:          { params: [path], needs_sketch: true }
+  loft:           { params: [sections], needs_sketch: false }
+  hole:           { params: [diameter, depth, through, kind, cb_diameter, cb_depth, csk_diameter, csk_angle_deg, positions], needs_sketch: false }
+  fillet:         { params: [radius, edges], needs_sketch: false }
+  chamfer:        { params: [distance, distance2, angle_deg, edges], needs_sketch: false }
+  shell:          { params: [thickness, open_faces], needs_sketch: false }
+  draft:          { params: [angle_deg, faces, neutral], needs_sketch: false }
+  rib:            { params: [thickness], needs_sketch: true }
+  boolean:        { params: [tool_feature], needs_sketch: false }
+  pattern_linear: { params: [features, direction, count, spacing, direction2, count2, spacing2], needs_sketch: false }
+  pattern_circular: { params: [features, axis, count, angle_deg], needs_sketch: false }
+  mirror:         { params: [features, plane], needs_sketch: false }
+  thread_cosmetic: { params: [designation, length], needs_sketch: false }
+  freeform_region: { params: [faces, max_patches], needs_sketch: false, note: "Tier 3 only; surface fit budget" }
+
+face_types: [plane, cylinder, cone, sphere, torus, bspline, other]

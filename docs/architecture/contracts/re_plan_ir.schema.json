@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/re_plan_ir/0.1.0",
+  "title": "RE Plan IR",
+  "description": "Tool-neutral reverse-engineering feature plan. Written by a strategy before any CAD call; consumed by tool harnesses and the evaluator. Describes design intent, not CAD commands. Coordinates are in the input STL frame (mm). File naming: plan/re_plan.v<revision>.json. The `type` enum and per-type `params` keys are generated from feature_taxonomy.yaml by recadbench-spec; this file lists types explicitly for readability.",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "part_id",
+    "revision",
+    "units",
+    "datums",
+    "features"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "const": "0.1.0"
+    },
+    "part_id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Must equal N in the file name re_plan.vN.json"
+    },
+    "units": {
+      "const": "mm"
+    },
+    "part_family": {
+      "type": "string",
+      "description": "Free text classification, e.g. 'flanged bracket', 'stepped shaft'"
+    },
+    "datums": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "kind",
+          "origin",
+          "direction"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "primary",
+              "secondary",
+              "tertiary"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "plane",
+              "axis",
+              "point"
+            ]
+          },
+          "origin": {
+            "$ref": "#/$defs/vec3"
+          },
+          "direction": {
+            "$ref": "#/$defs/vec3",
+            "description": "plane normal or axis direction, in the IR coordinate system"
+          },
+          "basis": {
+            "type": "string",
+            "description": "Functional justification, e.g. 'largest mounting face', 'main bore axis'"
+          },
+          "x_dir": {
+            "$ref": "#/$defs/vec3",
+            "description": "In-plane x direction for sketch coordinates; required when kind=plane"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "plane"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "x_dir"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Primary/secondary/tertiary datum reference frame. Extra construction planes go in reference_planes."
+    },
+    "parameters": {
+      "type": "array",
+      "description": "Named nominal values referenced by features (enables S5 editability).",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "value": {
+            "type": "number"
+          },
+          "measured": {
+            "type": "number",
+            "description": "Raw value measured from the STL before snapping"
+          },
+          "snap_source": {
+            "type": "string",
+            "description": "e.g. 'ISO 273 medium clearance M6', 'R20', 'none'"
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "params"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "primitive",
+              "extrude",
+              "revolve",
+              "sweep",
+              "loft",
+              "hole",
+              "fillet",
+              "chamfer",
+              "shell",
+              "draft",
+              "rib",
+              "boolean",
+              "pattern_linear",
+              "pattern_circular",
+              "mirror",
+              "thread_cosmetic",
+              "freeform_region"
+            ],
+            "description": "Keys of feature_taxonomy.yaml:types"
+          },
+          "operation": {
+            "enum": [
+              "new",
+              "add",
+              "cut",
+              "intersect"
+            ],
+            "default": "add"
+          },
+          "sketch": {
+            "$ref": "#/$defs/sketch"
+          },
+          "params": {
+            "type": "object",
+            "description": "Allowed keys per type in feature_taxonomy.yaml (checked by recadbench-spec). Values: number, string, vec3, or {\"ref\": parameter_name}.",
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/$defs/vec3"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "ref"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "array"
+                }
+              ]
+            }
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/selector"
+            },
+            "description": "Datum/plane ids, feature ids, or geometric selectors"
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "fit_primitives",
+                  "slice",
+                  "detect_holes",
+                  "visual",
+                  "prior",
+                  "gt"
+                ]
+              },
+              "inlier_pct": {
+                "type": "number"
+              },
+              "residual_mm": {
+                "type": "number"
+              },
+              "note": {
+                "type": "string"
+              },
+              "region_id": {
+                "type": "string",
+                "description": "retk region this feature explains"
+              }
+            }
+          }
+        }
+      }
+    },
+    "change_log": {
+      "type": "array",
+      "description": "For revision > 1: what changed vs previous revision and which region/feature motivated it.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference_planes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "origin",
+          "normal",
+          "x_dir"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/$defs/vec3"
+          },
+          "normal": {
+            "$ref": "#/$defs/vec3"
+          },
+          "x_dir": {
+            "$ref": "#/$defs/vec3"
+          },
+          "basis": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "sketch": {
+      "type": "object",
+      "required": [
+        "plane",
+        "entities"
+      ],
+      "additionalProperties": false,
+      "description": "2D sketch on a datum/reference plane or face selector; coordinates in that plane's (x_dir, normal×x_dir) frame, mm.",
+      "properties": {
+        "plane": {
+          "$ref": "#/$defs/selector"
+        },
+        "entities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "p1",
+                  "p2"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "line"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "p1": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "p2": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "construction": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "center",
+                  "radius",
+                  "start_deg",
+                  "end_deg"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "arc"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "center": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "radius": {
+                    "type": "number"
+                  },
+                  "start_deg": {
+                    "type": "number"
+                  },
+                  "end_deg": {
+                    "type": "number"
+                  },
+                  "construction": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "center",
+                  "radius"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "circle"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "center": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "radius": {
+                    "type": "number"
+                  },
+                  "construction": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "center",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "rect"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "center": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "width": {
+                    "type": "number"
+                  },
+                  "height": {
+                    "type": "number"
+                  },
+                  "angle_deg": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "c1",
+                  "c2",
+                  "radius"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "slot"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "c1": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "c2": {
+                    "$ref": "#/$defs/vec2"
+                  },
+                  "radius": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "points"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "polygon"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "points": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/vec2"
+                    },
+                    "minItems": 3
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "points"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "spline"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "points": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/vec2"
+                    },
+                    "minItems": 2
+                  },
+                  "closed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional intent hints, e.g. 'symmetric about y', 'concentric c1 c2'"
+        }
+      }
+    },
+    "selector": {
+      "type": "string",
+      "description": "Grammar: <id> | <feature_id>:<face_type>:<dir>:<extremum>[:<n>] where face_type∈{plane,cylinder,cone,sphere,torus,bspline,any}, dir∈{+X,-X,+Y,-Y,+Z,-Z,axis,any}, extremum∈{max,min,any}. Edge sets: <feature_id>:edges:<filter> where filter∈{all,outer,inner,convex,concave}. Example: F3:plane:+Z:max (top planar face of F3), F5:edges:outer.",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*(:(plane|cylinder|cone|sphere|torus|bspline|any):([+-][XYZ]|axis|any):(max|min|any)(:[0-9]+)?|:edges:(all|outer|inner|convex|concave))?$"
+    },
+    "vec2": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

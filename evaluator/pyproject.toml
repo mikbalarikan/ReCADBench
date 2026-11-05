@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recadbench-eval"
+version = "0.0.0"
+description = "ReCADBench evaluator (gate, alignment, S1–S5)"
+requires-python = ">=3.11"
+dependencies = ["recadbench-spec"]  # P1 stub: real dependencies added by the implementing prompt
+
+[tool.setuptools.packages.find]
+include = ["recadbench_eval*"]

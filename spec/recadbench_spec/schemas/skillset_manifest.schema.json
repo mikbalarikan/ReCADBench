@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recadbench/skillset_manifest/0.1.0",
+  "title": "skillset.yaml (L2, our CAD know-how)",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "backend",
+    "skills"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "== backend id folder name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$"
+    },
+    "backend": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "nx",
+            "build123d",
+            "solidcraft",
+            "freecad"
+          ]
+        },
+        "software_versions": {
+          "type": "string",
+          "description": "compatible range"
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "paths to skills/<name>/ folders"
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lib": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "helper packages copied to run dir lib/"
+    },
+    "shared": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "_shared/ir_execution.md",
+        "_shared/single_solid_rules.md"
+      ]
+    },
+    "changelog": {
+      "type": "string"
+    }
+  }
+}
