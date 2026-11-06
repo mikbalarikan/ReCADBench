@@ -6,14 +6,14 @@ Update at the end of every session.
 | Prompt | Scope in this repo | State |
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
-| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
+| P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002 (tag `spec-v0.2.0`), superseded by 0.3.0 (ADR 0004, tag `spec-v0.3.0`) |
 | P3 | Backends build123d / solidcraft / freecad + conformance suite | done (#8); H1: conformance 10/10 on all three on windows too, MCP tool-list snapshots + CI check (PR h1-desktop-backends) |
 | H3 | Spec 0.3.0 (ADR 0004): sketch refs, typed params, pattern_circular, features keys, denied_tools, 0.2.0 migration | done (#11, tag `spec-v0.3.0`) |
 | P4 | NX backend (runner, adapter, replays) | done (H4, PR h4-nx-backend): `recadbench nx-run`, `recad nx` adapter, 10 replays, conformance 10/10 on NX 2206 (Windows), counts identical to build123d |
-| P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
+| P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | done: tooling + 3 R385 pilots (gt #3, data #3; migrated to 0.3.0 in gt #5 / data #4) |
 | P7 | Evaluator + golden tests | done (H5, PR h5-evaluator): recadbench-eval 0.1.0, synthetic golden tests in CI, R385 pilot goldens on the evaluator host (9/9) |
 | P10 | Runner, compose, gate_hook, orchestrator | done (H8 + review fixes + hardening round fix2: HMAC gate state, shared AST CAD code policy, GT-copy backstop; OS isolation = owner action, PR #13 h8-runner): `recadbench` CLI (compose / seed-plan / agent / finish / run / gate / nx-run), gate (backend.yaml denied_tools, journal-source + script-body matching, plan + N+1 rule), agent backends claude_agent_sdk / litellm_loop / replay, SQLite queue + HTTP front + pull worker, expand; dry run oracle x build123d@v1 x r385_hs01 -> result.json (PASS, 81.7/95, plan 100) |
-| H9 | First-test plan: `orchestrator/experiments/pilot.yaml`, run count, cost / wall-time estimate | done (PR h9-pilot): 54 runs (T 24 / E 24 / S 6; 24 need the NX host), expected $299 (low $67, cap $1,435), ASUS about 8.6 h expected (NX lane bound) - `orchestrator/experiments/PILOT_ESTIMATE.md`; all 27 distinct composes OK; nx-v1 tag decision pending (owner) |
+| H9 | First-test plan: `orchestrator/experiments/pilot.yaml`, run count, cost / wall-time estimate | done (#14): 54 runs (T 24 / E 24 / S 6; 24 need the NX host), expected $299 (low $67, cap $1,435), ASUS about 8.6 h expected (NX lane bound) - `orchestrator/experiments/PILOT_ESTIMATE.md`; all 27 distinct composes OK; nx-v1 tag decision pending (owner) |
 | P11 | Pilot + calibration, threshold ADR, spec-v1.0.0 | todo |
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
