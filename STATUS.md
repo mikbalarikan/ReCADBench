@@ -16,6 +16,7 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — scanreg: robust shrinking ICP trim + coarse ICP after PCA (raw scans that include the scanner table / fixtures), KD-tree prefilter for far points (was pathologically slow), floor excludes extraneous scan geometry (> 1.5 mm, reported separately). Desktop survey: R385 scans and CAD are in different frames (no saved transform) → `--init pca`; pilots HS01, DR02, HS04.
 - 2026-11-05 — P6 tooling: `dataset/tools/scanreg.py` (PCA coarse + trimmed point-to-plane ICP, floor, observability with open-boundary/opposite-normal masks), `register_gt.py`, `make_task.py` (byte-identical scan copy, agent-visible metadata only, MANIFEST + splits); 13 synthetic tests (ICP 4 µm in 6 iterations). `recadbench-gt/AUTHORING.md` written.
 - 2026-11-05 — ADR 0002: inputs are REAL SCANS (scanner frame); spec 0.2.0 (task `input_kind` + scan metadata; gt_meta provenance/contamination, registration, scan floor, observability; result inferred-region metrics; test-split eligibility rules); architecture docs, P6/P7 prompts and roadmap updated. v1 = scan-rebuild parts, dev only.
 - 2026-11-05 — P1 Termux spike PASSED on a phone (Xiaomi 23117RA68G, Android 13, aarch64): STEP export via build123d-mcp, also via `proot-distro` stdio from the Termux side. Details: `backends/build123d/install.md`.
@@ -26,6 +27,9 @@ Update at the end of every session.
 ## Open questions
 
 ### From ADR 0002 (real scans)
+- **Golden-example scans over 100 MB** (GE-02 209 MB, GE-04 250 MB; GE-03 92 MB) cannot go in plain git. Options: Git LFS for those files only, Drive, or a lossless compressed copy. Decide before adding them (R385 pilots are all < 40 MB).
+- R385 folder also holds **downloaded public RS-385 CAD** → R385 meta: `public_cad: true`.
+- Dropped from the v1 pool: **M02** (its CAD was not fitted to the scan; scan is a segment of a client scan), **R385 SL02** (no scan), **R385 HS03** as a pilot (90° merge error between its two scan passes). **OD-H12** stays calibration-only (fused assembly, guessed interior, gate failed).
 - Decided: golden examples **cleared** (v1 dev pool, ADR 0002 table); **open-dedica kept aside** (later: calibrated reference STEPs once agent rebuilds deviate less).
 - M02-02-03 gear: is `M02-02-03.STL` a real scan? (provenance of the mesh)
 - Full-res originals of the golden-example scans are on Drive (`H:\My Drive\…`, see each MANIFEST.json `source_path`) — P6 must use those, not the decimated copies.
