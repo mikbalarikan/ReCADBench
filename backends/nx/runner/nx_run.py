@@ -12,7 +12,10 @@ Contract (05_TOOLS "recadbench nx-run contract"):
   * timeout per call (default 120 s, ``RECADBENCH_NX_TIMEOUT_S``); on timeout only the
     run_journal process started here (and its children) is killed, never NX by name;
   * stdout/stderr go to ``cad/logs/<journal>.log``; an NX syslog excerpt goes into last_run.json;
-  * exit 0 if ok, 1 on any NX / journal error, 2 on usage errors. One JSON summary on stdout.
+  * exit 0 if ok, 1 on any NX / journal error, 2 on usage errors. One JSON summary on stdout;
+  * before NX starts, the journal and every other .py under ``cad/`` are checked against
+    ``backends/nx/backend.yaml`` ``denied_tools`` (ADR 0004: journal code that imports or analyses
+    the scan); a match refuses the run (exit 1, ``denied: true``, part untouched).
 
 Environment:
   RECADBENCH_NX_RUN_JOURNAL   run_journal.exe (default: %UGII_BASE_DIR%\\NXBIN\\run_journal.exe,
@@ -248,6 +251,80 @@ def run_wrapped(
     return res
 
 
+BACKEND_YAML = HERE.parent / "backend.yaml"
+COMMAND = "recadbench nx-run"
+
+
+def _yaml_scalar(text: str) -> str:
+    """A plain or single-quoted YAML scalar on one line (the form backend.yaml uses)."""
+    text = text.strip()
+    if text.startswith("'") and text.endswith("'") and len(text) >= 2:
+        return text[1:-1].replace("''", "'")
+    if text.startswith('"'):
+        return json.loads(text)
+    return text
+
+
+def denied_rules(path: Path = BACKEND_YAML) -> list[dict[str, str]]:
+    """backend.yaml `denied_tools` (stdlib only: a reader for the flat list form of that block;
+    backends/nx/tests checks it against yaml.safe_load). Continuation lines of a plain `reason`
+    are joined with a space."""
+    rules: list[dict[str, str]] = []
+    inside = False
+    last = None
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if raw.startswith("denied_tools:"):
+            inside = True
+            continue
+        if not inside or raw.lstrip().startswith("#") or not raw.strip():
+            continue
+        if not raw.startswith((" ", "-")):
+            break  # next top-level key
+        line = raw[2:] if raw.startswith("- ") else raw
+        if raw.startswith("- "):
+            rules.append({})
+        key, sep, val = line.strip().partition(": ")
+        if sep and key in ("tool", "args_regex", "reason") and line.startswith(("  ", key)):
+            rules[-1][key] = _yaml_scalar(val)
+            last = key
+        elif last == "reason":
+            rules[-1]["reason"] += " " + raw.strip()
+    return rules
+
+
+def denied(command: str, journal_text: str, rules: list[dict[str, str]] | None = None):
+    """The first denied_tools rule that matches this run (ADR 0004 matcher: `tool` is a prefix of
+    the command, `args_regex` is searched in json.dumps(arguments)), or None."""
+    import re
+
+    rules = denied_rules() if rules is None else rules
+    blob = json.dumps({"command": command, "journal": journal_text}, ensure_ascii=False)
+    for r in rules:
+        if command.startswith(r["tool"]) and (
+            "args_regex" not in r or re.search(r["args_regex"], blob)
+        ):
+            return r
+    return None
+
+
+def check_journal(run_dir: Path, journal: Path, command: str) -> str | None:
+    """Reason text when the journal or another .py under cad/ (importable by the journal) is
+    denied by backend.yaml denied_tools; None when the run may start."""
+    cad = run_dir / "cad"
+    files = [journal] + sorted(p for p in cad.rglob("*.py") if p.resolve() != journal)
+    rules = denied_rules()
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        hit = denied(command, text, rules)
+        if hit:
+            rel = f.resolve().relative_to(run_dir).as_posix()
+            return f"denied: {rel}: {hit.get('reason', 'backend.yaml denied_tools')}"
+    return None
+
+
 def _write_json(path: Path, obj: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8", newline="\n")
@@ -288,6 +365,23 @@ def main(argv: list[str] | None = None) -> int:
         return usage(f"no journal {journal}")
     if not part.is_relative_to(cad) or part.suffix.lower() != ".prt":
         return usage(f"part must be a .prt under {cad} (got {a.part})")
+    deny = check_journal(run_dir, journal, f"{COMMAND} {a.journal}")
+    if deny:
+        res = {
+            "ok": False,
+            "error": deny,
+            "denied": True,
+            "saved": False,
+            "journal": journal.relative_to(run_dir).as_posix(),
+            "part": part.relative_to(run_dir).as_posix(),
+        }
+        _write_json(cad / "last_run.json", res)
+        print(
+            json.dumps(
+                {"ok": False, "error": deny, "denied": True, "last_run": "cad/last_run.json"}
+            )
+        )
+        return 1
     lib = (
         Path(os.environ["RECADBENCH_NX_LIB"])
         if os.environ.get("RECADBENCH_NX_LIB")

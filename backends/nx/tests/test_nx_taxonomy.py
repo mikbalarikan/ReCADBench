@@ -185,3 +185,64 @@ def test_union_of_two_multi_feature_bodies_after_unrelated_body_counts():
     doc = T.build(rows)
     b = next(f for f in doc["features"] if f["taxonomy_type"] == "boolean")
     assert b["counted"] and (b["params"]["n_body"], b["params"]["n_tool"]) == (2, 2)
+
+
+# ---------------------------------------------------------------- H4 fixer 2: surface features
+# Class / FeatureType pairs measured on NX 2206 (host test test_surface_features_are_unmapped).
+SURFACE_ROWS = [
+    ("BoundedPlane", "SKIN"),
+    ("Sew", "SEW"),
+    ("Thicken", "THICKEN_SHEET"),
+    ("TrimSheet", "TRIMMED_SH"),
+    ("ExtendSheet", "EXTEND_SHEET"),
+    ("LawExtensionEx", "LAWEXTENSION"),
+    ("TrimAndExtend", "TRIM_AND_EXTEND"),
+]
+
+
+def test_surface_features_are_unmapped_with_the_v1_reason():
+    rows = [row(1, "Extrude", "EXTRUDE")] + [
+        row(i + 2, cls, ftype, parents=[1]) for i, (cls, ftype) in enumerate(SURFACE_ROWS)
+    ]
+    doc = T.build(rows)
+    assert doc["count"] == 1 and len(doc["unmapped"]) == len(SURFACE_ROWS), doc["unmapped"]
+    for u in doc["unmapped"]:
+        assert "surface feature" in u and "not countable in v1" in u, u
+        assert "unknown NX feature" not in u, u
+
+
+def test_surface_feature_types_are_unmapped_for_a_generic_class():
+    for _cls, ftype in SURFACE_ROWS:
+        if ftype == "SKIN":  # Ruled / Swept / Bounded Plane share SKIN: classified by class
+            continue
+        tax, why = T.classify("BodyFeature", ftype)
+        assert tax is None and "not countable in v1" in why, (ftype, why)
+
+
+def test_surface_classes_never_reach_the_taxonomy():
+    for cls, _ftype in SURFACE_ROWS:
+        assert cls not in T.CLASS_MAP and cls in T.UNMAPPED_CLASSES
+
+
+def test_mirror_body_counts_as_mirror():
+    # Block, datum plane, Mirror Body of the block (one node, type MIRROR), Unite of the copy:
+    # the unite merges the single-feature mirror operand -> folded; count block + mirror = 2.
+    doc = T.build(
+        [
+            CSYS,
+            row(1, "Block", "BLOCK"),
+            row(2, "DatumPlaneFeature", "DATUM_PLANE"),
+            row(3, "MirrorBody", "MIRROR", parents=[1, 2]),
+            row(4, "BooleanFeature", "UNITE", parents=[1, 3]),
+        ]
+    )
+    assert counted(doc) == ["primitive", "mirror"] and doc["count"] == 2, doc
+    assert doc["unmapped"] == []
+
+
+def test_suppressed_rows_are_listed_as_excluded():
+    doc = T.build([row(1, "Extrude", "EXTRUDE"), row(2, "EdgeBlend", "BLEND", suppressed=True)])
+    assert doc["count"] == 1 and doc["unmapped"] == []
+    assert doc["excluded"] == [
+        {"native_name": "EdgeBlend(2)", "native_type": "EdgeBlend/BLEND", "reason": "suppressed"}
+    ]

@@ -11,6 +11,7 @@ opened (``NXOpen.Session.GetSession().Parts.Work``).
 
 import math
 
+import _ir
 import NXOpen
 import NXOpen.Features
 import NXOpen.GeometricUtilities as GU
@@ -47,6 +48,18 @@ def units(part):
 
 def expr(part, name, value, unit="mm"):
     return part.Expressions.CreateWithUnits(f"{name}={float(value)!r}", units(part)[unit])
+
+
+def ir():
+    """The spec 0.3.0 IR of the running replay (ir_cases/<journal stem>/re_plan.v1.json)."""
+    return _ir.for_journal()
+
+
+def ir_parameters(part, doc, unitless=()):
+    """One named expression per IR parameter (IR `parameters[].name` = NX expression name, the
+    set-param handle); names in `unitless` get no unit (e.g. a draft angle)."""
+    for name, v in _ir.parameters(doc).items():
+        expr(part, name, v, None if name in unitless else "mm")
 
 
 def update():
@@ -355,16 +368,31 @@ def pattern_linear(part, features, xdir, nx, px, ydir=None, ny=None, py=None):
     return _pattern(part, features, layout)
 
 
-def pattern_circular(part, features, origin, vec, count, span=360):
+def pattern_circular(part, features, origin, vec, count, span=360, pitch=None):
+    """Circular Pattern Feature. Full circle: Span `span` (360). With `pitch` (formula of the
+    angle between neighbours, IR 0.3.0 step): Offset spacing, instance k at k * pitch."""
+
     def layout(ps):
         ps.PatternType = PAT.Circular
         cd = ps.CircularDefinition
         cd.RotationAxis = axis(part, origin, vec)
         cd.AngularSpacing.NCopies.RightHandSide = str(count)
-        cd.AngularSpacing.SpaceType = SPACE.Span
-        cd.AngularSpacing.SpanAngle.RightHandSide = str(span)
+        if pitch is None:
+            cd.AngularSpacing.SpaceType = SPACE.Span
+            cd.AngularSpacing.SpanAngle.RightHandSide = str(span)
+        else:
+            cd.AngularSpacing.SpaceType = SPACE.Offset
+            cd.AngularSpacing.PitchAngle.RightHandSide = str(pitch)
 
     return _pattern(part, features, layout)
+
+
+def ir_pattern_circular(part, doc, fid, features, origin, vec):
+    """pattern_circular of IR feature `fid` (spec 0.3.0: angle_deg = total sweep or pitch_deg)."""
+    mode, angle, count = _ir.circular_spacing(doc, _ir.feature(doc, fid)["params"])
+    if mode == "span":
+        return pattern_circular(part, features, origin, vec, count, span=angle)
+    return pattern_circular(part, features, origin, vec, count, pitch=angle)
 
 
 def mirror_feature(part, features, plane):

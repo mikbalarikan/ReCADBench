@@ -50,6 +50,10 @@ CLASS_MAP = {
     "DraftBody": "draft",
     "Rib": "rib",
     "Mirror": "mirror",
+    # Extract Geometry > Mirror Body (CreateMirrorBodyBuilder): one tree node, type MIRROR, a
+    # mirrored copy of whole bodies about a datum plane = taxonomy mirror {features, plane}
+    # (measured on NX 2206, H4 fixer 2)
+    "MirrorBody": "mirror",
     "Block": "primitive",
     "Cylinder": "primitive",
     "Cone": "primitive",
@@ -115,6 +119,35 @@ UNMAPPED_CLASSES = {
     "TrimBody2": "Trim Body (no taxonomy type)",
     "SplitBody": "Split Body (no taxonomy type)",
 }
+# Sheet (surface) construction and surface-to-solid features: spec 0.3.0 has no taxonomy type for
+# them (adding one needs an ADR), so they are unmapped (gate fail); v1 tasks use native solid
+# features. Class / FeatureType measured on NX 2206 (H4 fixer 2): BoundedPlane/SKIN, Sew/SEW,
+# Thicken/THICKEN_SHEET, TrimSheet/TRIMMED_SH, ExtendSheet/EXTEND_SHEET,
+# LawExtensionEx/LAWEXTENSION, TrimAndExtend/TRIM_AND_EXTEND.
+SURFACE_REASON = (
+    "surface feature (sheet construction / sheet-to-solid): no taxonomy type in spec 0.3.0, not "
+    "countable in v1; model the part with native solid features"
+)
+SURFACE_CLASSES = {
+    "BoundedPlane": "Bounded Plane",
+    "Sew": "Sew",
+    "Thicken": "Thicken",
+    "TrimSheet": "Trim Sheet",
+    "ExtendSheet": "Extend Sheet",
+    "LawExtensionEx": "Law Extension",
+    "TrimAndExtend": "Trim and Extend",
+}
+for _cls, _label in SURFACE_CLASSES.items():
+    UNMAPPED_CLASSES[_cls] = f"{_label}: {SURFACE_REASON}"
+# FeatureType fallbacks for the same features (a row whose class is generic).
+SURFACE_TYPES = {
+    "SEW": "Sew",
+    "THICKEN_SHEET": "Thicken",
+    "TRIMMED_SH": "Trim Sheet",
+    "EXTEND_SHEET": "Extend Sheet",
+    "LAWEXTENSION": "Law Extension",
+    "TRIM_AND_EXTEND": "Trim and Extend",
+}
 # FeatureType strings that identify a row whose class is generic (Feature / BodyFeature).
 TYPE_MAP = {
     "UNITE": "boolean",
@@ -128,6 +161,8 @@ UNMAPPED_TYPES = {
     "EXTRACT_BODY": "extracted body copy (no design feature)",
     "LINKED_BODY": "linked body from another part",
 }
+for _t, _label in SURFACE_TYPES.items():
+    UNMAPPED_TYPES[_t] = f"{_label}: {SURFACE_REASON}"
 BOOLEAN_KIND = {"UNITE": "union", "SUBTRACT": "subtract", "INTERSECT": "intersect"}
 
 # Layouts of Pattern Feature / Pattern Geometry / Mirror Geometry (PatternDefinition.PatternEnum,
@@ -190,13 +225,23 @@ def build(rows: list[dict]) -> dict:
     features: list[dict] = []
     unmapped: list[str] = []
     not_in_final: list[str] = []
+    excluded: list[dict] = []
     parents = {r["ts"]: list(r.get("parents") or []) for r in rows}
     tax_of: dict[int, str] = {}
     for r in rows:
         tax, why = classify(r["cls"], r["type"], r.get("layout"))
         label = f"{r['name']} ({r['cls']}/{r['type']})"
         if r.get("suppressed"):
-            continue  # inactive rows are not part of the model (suppressed or rolled back)
+            # inactive rows are not part of the model (suppressed or rolled back): features.json
+            # `excluded` (spec 0.3.0), neither counted nor unmapped
+            excluded.append(
+                {
+                    "native_name": r["name"],
+                    "native_type": f"{r['cls']}/{r['type']}",
+                    "reason": "suppressed",
+                }
+            )
+            continue
         if tax is None:
             unmapped.append(f"{label}: {why}")
             continue
@@ -254,4 +299,6 @@ def build(rows: list[dict]) -> dict:
     }
     if not_in_final:
         out["not_in_final_part"] = not_in_final
+    if excluded:
+        out["excluded"] = excluded
     return out

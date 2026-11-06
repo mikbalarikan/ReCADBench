@@ -109,6 +109,30 @@ CASES = [
     ("build123d", "mcp__build123d__execute", {"code": "import trimesh\nm = trimesh.load(p)"},
      True),
     ("build123d", "mcp__build123d__execute", {"code": 's = import_step("scan.stl")'}, True),
+    # nx (kind cli): tool = the command line, arguments = {command, journal source text}
+    # (backends/nx/backend.yaml; recadbench nx-run enforces the same rule before NX starts).
+    *[
+        ("nx", "recadbench nx-run cad/j.py",
+         {"command": "recadbench nx-run cad/j.py", "journal": code}, expect)
+        for code, expect in [
+            ("import NXOpen, NXOpen.Facet\nb = part.FacetedBodies.CreateSTLImportBuilder()", True),
+            ("from NXOpen import Features, Facet", True),
+            ("x = 1\nb2.File = 'input/input.stl'", True),
+            ('b2.File = "scan.STL"', True),
+            ("cb = part.Features.CreateConvergentBodyBuilder()", True),
+            ("imp = S.DexManager.CreateObjImporter()", True),
+            ("b = part.Features.CreateFitSurfaceBuilder(NF)", True),
+            ("x = 1\nimport trimesh", True),
+            ("import os\nfiles = os.listdir('input/')", True),
+            ("from nxhelpers import nxh, nxf\npart = nxh.work_part()\n"
+             "blk = nxh.block(part, (0, 0, 0), (40, 30, 10))", False),
+            ("# facet count of the display body is irrelevant\nnxf.edge_blend(part, chains)",
+             False),
+            ("import NXOpen.Features\nimport NXOpen.GeometricUtilities as GU", False),
+            ("input_w = 5\nnxh.expr(part, 'input_w', input_w)", False),
+            ("f = part.Features.CreateFitCurveBuilder(NF)", False),
+        ]
+    ],
 ]
 
 

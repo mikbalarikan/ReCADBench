@@ -14,10 +14,11 @@ import os
 import re
 import time
 
-import nx_taxonomy
 import NXOpen
 import NXOpen.Features
 import NXOpen.GeometricUtilities
+
+import nx_taxonomy
 
 S = NXOpen.Session.GetSession()
 TEMPLATE = "model-plain-1-mm-template.prt"
@@ -167,6 +168,14 @@ def facet_unmapped(part):
         "feature"
         for jid in imported_facet_bodies(part)
     ]
+
+
+def _body_name(b):
+    """Journal identifier of a body (e.g. "EXTRUDE(1)"); its tag when NX gives none."""
+    try:
+        return str(b.JournalIdentifier)
+    except Exception:  # noqa: BLE001
+        return str(b.Tag)
 
 
 def bodies_summary(part):
@@ -338,10 +347,15 @@ def extract(part, native_path):
     }
     if tree.get("not_in_final_part"):
         doc["not_in_final_part"] = tree["not_in_final_part"]
+    if tree.get("excluded"):
+        doc["excluded"] = tree["excluded"]
     summ = bodies_summary(part)
     if "faces" in summ:
         doc["face_count"] = summ["faces"]
-    doc["bodies"] = summ["bodies"]
+    # spec 0.3.0 (ADR 0004 section 4): `bodies` = names of the solid bodies (informational)
+    doc["bodies"] = [_body_name(b) for b in solids(part)]
+    if len(doc["bodies"]) == 1:
+        doc["final_part"] = f"the single solid body {doc['bodies'][0]}"
     doc["sheets"] = summ["sheets"]
     doc["facet_bodies"] = summ["facet_bodies"]
     return doc

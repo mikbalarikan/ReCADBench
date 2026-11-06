@@ -8,7 +8,8 @@ import _nxr as X
 
 part = X.work()
 d = X.Datums(part)
-X.expr(part, "shaft_len", 60.0)
+IR = X.ir()  # spec 0.3.0 IR of this case (parameters, pattern params)
+X.ir_parameters(part, IR)
 p_xz = X.datum_plane(part, (0, 0, 0), (0, -1, 0))  # sketch u = +X, v = +Z
 P = X.P
 

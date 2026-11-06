@@ -305,7 +305,8 @@ def test_union_with_unrelated_earlier_body_matches_build123d(tmp_path):
     +X. Both unites have a single-feature operand -> count 4, like the build123d twin
     (a = Box; b = Box + Box; x = Box; a + b + x). Analytic volume 5200 mm3."""
     (tmp_path / "cad").mkdir()
-    (tmp_path / "cad" / "_nxr.py").write_bytes((NX / "replays" / "_nxr.py").read_bytes())
+    for helper in ("_nxr.py", "_ir.py"):
+        (tmp_path / "cad" / helper).write_bytes((NX / "replays" / helper).read_bytes())
     j = journal(tmp_path, "bool3.py", BOOL3)
     rc, res = nx_run_cli(tmp_path, j)
     assert rc == 0 and res["ok"], res
@@ -337,8 +338,14 @@ b2.ShowInformationWindow = False
 b2.Commit(); b2.Destroy()
 """,
     )
+    # `recadbench nx-run` refuses this journal (backend.yaml denied_tools) ...
     rc, res = nx_run_cli(tmp_path, j)
-    last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
+    assert rc == 1 and res.get("denied"), res
+    # ... so build the part through the wrapper directly: the counter must still see the mesh
+    # (a part that reached extract by another route).
+    last = nx_run.run_wrapped(
+        tmp_path / j, tmp_path / "cad" / "part.prt", tmp_path / "cad" / "res.json", 300
+    )
     assert last["ok"] and last["saved"], last
     assert last["count"] == 1 and last["unmapped"], last
     if kind == "Jt":
@@ -361,3 +368,207 @@ part.Expressions.CreateWithUnits("Pattern_pitch=15", part.UnitCollection.FindObj
     names = {p["name"]: p for p in last["parameters"]}
     assert set(names) == {"p1_width", "Pattern_pitch"}, names
     assert names["p1_width"]["value"] == 20.0 and "Extrude" in names["p1_width"]["feature"]
+
+
+# ---------------------------------------------------------------- H4 fixer 2 (host): surfaces
+# Raw NXOpen (no skillset lib): sheets from Bounded Planes, then Extend Sheet, Trim Sheet, Sew,
+# Thicken, Law Extension and Trim and Extend; Mirror Body of the block about a datum plane.
+SURFACES = """
+import NXOpen, NXOpen.Features, NXOpen.UF
+import NXOpen.GeometricUtilities as GU
+S = NXOpen.Session.GetSession(); part = S.Parts.Work
+F, RF, NF = part.Features, part.ScRuleFactory, NXOpen.Features.Feature.Null
+P = lambda x, y, z: NXOpen.Point3d(float(x), float(y), float(z))
+UFS = NXOpen.UF.UFSession.GetUFSession()
+
+
+def sec_fill(sec, curves=None, edges=None, hp=(0, 0, 0)):
+    rules = []
+    if curves:
+        rules.append(RF.CreateRuleCurveDumb(list(curves)))
+    if edges:
+        rules.append(RF.CreateRuleEdgeDumb(list(edges)))
+    seed = (list(curves) if curves else list(edges))[0]
+    sec.AddToSection(rules, seed, NXOpen.NXObject.Null, NXOpen.NXObject.Null, P(*hp),
+                     NXOpen.Section.Mode.Create, False)
+    return sec
+
+
+def poly(pts):
+    return [part.Curves.CreateLine(P(*pts[i]), P(*pts[(i + 1) % len(pts)]))
+            for i in range(len(pts))]
+
+
+def bbox(o):
+    return UFS.ModlGeneral.AskBoundingBox(o.Tag)
+
+
+def bounded(pts):
+    b = F.CreateBoundedPlaneBuilder(NXOpen.Features.BoundedPlane.Null)
+    try:
+        b.BoundingCurves.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
+        sec_fill(b.BoundingCurves, curves=poly(pts), hp=pts[0])
+        return b.CommitFeature()
+    finally:
+        b.Destroy()
+
+
+bb = F.CreateBlockFeatureBuilder(NF)
+bb.Type = NXOpen.Features.BlockFeatureBuilder.Types.OriginAndEdgeLengths
+bb.SetOriginAndLengths(P(0, 0, 0), "40", "30", "10")
+blk = bb.CommitFeature(); bb.Destroy()
+solid = blk.GetBodies()[0]
+
+s1 = bounded([(0, 0, 50), (40, 0, 50), (40, 30, 50), (0, 30, 50)]).GetBodies()[0]
+s2 = bounded([(40, 0, 50), (60, 0, 50), (60, 30, 50), (40, 30, 50)]).GetBodies()[0]
+
+ESB = NXOpen.Features.ExtendSheetBuilder
+b = F.TrimFeatureCollection.CreateExtendSheetBuilder(NXOpen.Features.ExtendSheet.Null)
+b.DistanceTolerance = 0.01; b.LimitMethod = ESB.Limit.Offset
+e30 = [e for e in s2.GetEdges() if abs(bbox(e)[1] - 30) < 1e-6 and abs(bbox(e)[4] - 30) < 1e-6]
+b.TargetBoundaryEdges.ReplaceRules([RF.CreateRuleEdgeDumb(e30)], False)
+b.Offset.RightHandSide = "5"; b.CommitFeature(); b.Destroy()
+
+TSB = NXOpen.Features.TrimSheetBuilder
+b = F.CreateTrimsheetBuilder(NF)
+b.Tolerance = 0.01; b.TargetBodies.Add(s1)
+b.Regions.Append(part.CreateRegionPoint(part.Points.CreatePoint(P(5, 5, 50)), s1))
+b.KeepDiscardMethod = TSB.KeepDiscardOption.Keep; b.ExtendBoundaryObject = True
+sec = part.Sections.CreateSection(0.0095, 0.01, 0.5)
+sec.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.CurvesAndPoints)
+b.BoundaryObjects.Add(sec_fill(sec, curves=[part.Curves.CreateLine(P(15, -5, 50), P(15, 35, 50))],
+                               hp=(15, -5, 50)))
+b.Commit(); b.Destroy()
+
+s3 = bounded([(0, 0, 80), (20, 0, 80), (20, 20, 80), (0, 20, 80)]).GetBodies()[0]
+s4 = bounded([(20, 0, 80), (40, 0, 80), (40, 20, 80), (20, 20, 80)]).GetBodies()[0]
+b = F.CreateSewBuilder(NF); b.Tolerance = 0.01; b.TargetBodies.Add(s3); b.ToolBodies.Add(s4)
+sew = b.Commit(); b.Destroy()
+
+b = F.CreateThickenBuilder(NF); b.Tolerance = 0.01
+b.FaceCollector.ReplaceRules([RF.CreateRuleFaceBody(sew.GetBodies()[0])], False)
+b.FirstOffset.RightHandSide = "2"; b.SecondOffset.RightHandSide = "0"
+b.BooleanOperation.Type = GU.BooleanOperation.BooleanType.Create
+b.CommitFeature(); b.Destroy()
+
+top = [f for f in solid.GetFaces()
+       if abs(bbox(f)[2] - 10) < 1e-6 and abs(bbox(f)[5] - 10) < 1e-6][0]
+edge = [e for e in top.GetEdges() if abs(bbox(e)[1]) < 1e-6 and abs(bbox(e)[4]) < 1e-6][0]
+LEB = NXOpen.Features.LawExtensionBuilderEx
+b = F.CreateLawExtensionBuilderEx(NF)
+b.Type = LEB.Types.Faces; b.DistanceTolerance = 0.01
+b.BaseProfile.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
+sec_fill(b.BaseProfile, edges=[edge], hp=(0, 0, 10))
+b.Faces.ReplaceRules([RF.CreateRuleFaceDumb([top])], False)
+b.LengthLaw.LawType = GU.LawBuilder.Type.Constant; b.LengthLaw.Value.RightHandSide = "10"
+b.AngleLaw.LawType = GU.LawBuilder.Type.Constant; b.AngleLaw.Value.RightHandSide = "90"
+b.CommitFeature(); b.Destroy()
+
+cut = bounded([(30, 5, 2), (30, 25, 2), (30, 25, 8), (30, 5, 8)]).GetBodies()[0]
+TEB = NXOpen.Features.TrimAndExtendBuilder
+b = F.TrimFeatureCollection.CreateTrimAndExtendBuilder(NXOpen.Features.TrimAndExtend.Null)
+b.DistanceTolerance = 0.01; b.Operation = TEB.OperationType.UntilSelected
+b.TargetSelection.ReplaceRules([RF.CreateRuleFaceBody(solid)], False)
+b.ToolSelection.ReplaceRules([RF.CreateRuleEdgeDumb(list(cut.GetEdges()))], False)
+b.ReverseTool = False; b.CommitFeature(); b.Destroy()
+"""
+
+MIRROR_BODY = """
+import NXOpen, NXOpen.Features
+S = NXOpen.Session.GetSession(); part = S.Parts.Work
+F, RF, NF = part.Features, part.ScRuleFactory, NXOpen.Features.Feature.Null
+UPD = NXOpen.SmartObject.UpdateOption.WithinModeling
+P = lambda x, y, z: NXOpen.Point3d(float(x), float(y), float(z))
+bb = F.CreateBlockFeatureBuilder(NF)
+bb.Type = NXOpen.Features.BlockFeatureBuilder.Types.OriginAndEdgeLengths
+bb.SetOriginAndLengths(P(0, 0, 0), "40", "30", "10")
+blk = bb.CommitFeature(); bb.Destroy()
+solid = blk.GetBodies()[0]
+db = F.CreateDatumPlaneBuilder(NF)
+pl = db.GetPlane(); pl.SetMethod(NXOpen.PlaneTypes.MethodType.PointDir)
+pl.SetGeometry([part.Points.CreatePoint(P(0, 0, 0)),
+                part.Directions.CreateDirection(P(0, 0, 0), NXOpen.Vector3d(1.0, 0.0, 0.0), UPD)])
+pl.Evaluate(); dp = db.CommitFeature().DatumPlane; db.Destroy()
+b = F.CreateMirrorBodyBuilder(NF)
+b.MirrorBodyCollector.ReplaceRules([RF.CreateRuleBodyDumb([solid], True)], False)
+b.Plane.Value = dp; b.Associative = True
+mb = b.CommitFeature(); b.Destroy()
+ub = F.CreateBooleanBuilderUsingCollector(NXOpen.Features.BooleanFeature.Null)
+ub.Operation = NXOpen.Features.Feature.BooleanType.Unite
+ub.Target = solid
+tc = part.ScCollectors.CreateCollector()
+tc.ReplaceRules([RF.CreateRuleBodyDumb([mb.GetBodies()[0]], True)], False)
+ub.ToolBodyCollector = tc
+ub.Commit(); ub.Destroy()
+"""
+
+
+@needs_nx
+def test_surface_features_are_unmapped(tmp_path):
+    """Class / FeatureType of the surface features the nx-surface-modeling skill teaches, measured
+    on NX 2206: every one is unmapped with the v1 reason (spec 0.3.0 has no taxonomy type)."""
+    j = journal(tmp_path, "surfaces.py", SURFACES)
+    rc, res = nx_run_cli(tmp_path, j)
+    last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
+    assert last["ok"] and last["saved"], last
+    assert last["count"] == 1, last  # the block
+    want = {
+        "BoundedPlane/SKIN",
+        "ExtendSheet/EXTEND_SHEET",
+        "TrimSheet/TRIMMED_SH",
+        "Sew/SEW",
+        "Thicken/THICKEN_SHEET",
+        "LawExtensionEx/LAWEXTENSION",
+        "TrimAndExtend/TRIM_AND_EXTEND",
+    }
+    seen = {u.split(" (", 1)[1].split(")", 1)[0] for u in last["unmapped"]}
+    assert want <= seen, (want - seen, last["unmapped"])
+    assert all("not countable in v1" in u for u in last["unmapped"]), last["unmapped"]
+
+
+@needs_nx
+def test_mirror_body_counts_as_mirror(tmp_path):
+    """Block + Mirror Body (class MirrorBody, type MIRROR) about the YZ datum + Unite of the copy:
+    count block + mirror = 2 (the unite only merges the single-feature mirror), one solid of
+    2 x 12000 mm3."""
+    j = journal(tmp_path, "mirror_body.py", MIRROR_BODY)
+    rc, res = nx_run_cli(tmp_path, j)
+    last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
+    assert rc == 0 and last["ok"], last
+    assert last["bodies"] == 1 and abs(last["volume"] - 24000.0) < 1e-6, last
+    types = [f["taxonomy_type"] for f in last["features"] if f["counted"]]
+    assert types == ["primitive", "mirror"] and last["unmapped"] == [], last
+    assert any(f["type"] == "MirrorBody/MIRROR" for f in last["features"]), last
+
+
+PITCH = """
+import _nxr as X
+
+part = X.work()
+d = X.Datums(part)
+sk = X.new_sketch(part, d.xy, d.x, d.origin)
+ls = X.rect_centered(part, sk, X.point(part, 0, 12.5, 0), 60, 35, v0=12.5)  # y -5..30
+X.finish(sk)
+body = X.extrude(part, X.section(part, ls), (0, 0, 1), 0, 10).GetBodies()[0]
+seed = X.hole(part, body, [(20, 0, 10)], 6)
+IR = {"parameters": [], "features": [{"id": "F3", "type": "pattern_circular",
+      "params": {"features": ["F2"], "axis": "D2", "count": 3, "pitch_deg": 90}}]}
+X.ir_pattern_circular(part, IR, "F3", [seed], (0, 0, 0), (0, 0, 1))
+"""
+
+
+@needs_nx
+def test_partial_circular_pattern_pitch_deg(tmp_path):
+    """spec 0.3.0 pitch_deg: 3 holes at 0, 90, 180 deg on a plate x -30..30, y -5..30, all
+    inside: V = 60*35*10 - 3*pi*3^2*10 = 21000 - 270 pi. Spread over 360 (120 deg) two of them
+    would miss the plate (y = -17.3) and V would be larger."""
+    import math
+
+    (tmp_path / "cad").mkdir()
+    for helper in ("_nxr.py", "_ir.py"):
+        (tmp_path / "cad" / helper).write_bytes((NX / "replays" / helper).read_bytes())
+    j = journal(tmp_path, "pitch.py", PITCH)
+    rc, res = nx_run_cli(tmp_path, j)
+    assert rc == 0 and res["ok"], res
+    assert abs(res["volume"] - (21000 - 270 * math.pi)) < 1e-3, res
+    assert res["features"] == ["extrude", "hole", "pattern_circular"], res

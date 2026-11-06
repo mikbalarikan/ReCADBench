@@ -8,8 +8,8 @@ import _nxr as X
 
 part = X.work()
 d = X.Datums(part)
-X.expr(part, "bracket_depth", 20.0)
-X.expr(part, "hole_d", 6.0)
+IR = X.ir()  # spec 0.3.0 IR of this case (parameters, pattern params)
+X.ir_parameters(part, IR)
 p_xz = X.datum_plane(part, (0, 10, 0), (0, -1, 0))  # sketch u = +X, v = +Z
 sk = X.new_sketch(part, p_xz, d.x, d.origin)
 ls = X.hv_polygon(part, sk, [(0, 0), (35, 0), (35, 30), (29, 30), (29, 6), (0, 6)])

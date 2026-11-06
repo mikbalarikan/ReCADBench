@@ -81,6 +81,12 @@ time. **Result: PASS.** nx 10/10, build123d 10/10 (same run), cross-backend coun
 identical for every case.
 Re-run after the H4 review fixes (boolean operand closure, facet bodies, user expressions): same
 result, nx 10/10 and build123d 10/10, counts and types identical.
+Re-run after the port to spec 0.3.0 (H4 fixer 2: replays read the 0.3.0 IRs through
+`replays/_ir.py` - parameters, `{"ref"}` formulas, `pattern_circular` angle_deg = total sweep /
+pitch_deg -; features.json `bodies` as a list of names, `final_part`, `excluded`; backend.yaml
+`denied_tools`; surface features unmapped, Mirror Body = mirror): nx 10/10 and build123d 10/10,
+counts and types identical, every features.json valid against the 0.3.0 schema, set-param ok,
+largest NX volume error 2.2e-9 relative.
 
 | Case | Expected n | nx vol err / n / set-param | Faces = expected | Types in IR order |
 |---|---|---|---|---|

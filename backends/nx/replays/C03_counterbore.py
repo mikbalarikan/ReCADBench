@@ -5,7 +5,8 @@ import _nxr as X
 
 part = X.work()
 d = X.Datums(part)
-X.expr(part, "cb_depth", 5.0)
+IR = X.ir()  # spec 0.3.0 IR of this case (parameters, pattern params)
+X.ir_parameters(part, IR)
 sk = X.new_sketch(part, d.xy, d.x, d.origin)
 ls = X.rect_centered(part, sk, d.origin, 40, 40)
 X.finish(sk)

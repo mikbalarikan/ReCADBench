@@ -38,6 +38,13 @@ recadbench nx-run cad/step_01.py     # [--timeout 120] [--part cad/part.prt]
   by the wrapper from the NX session (the same counter as `recad nx extract`), never self-reported.
 - stdout/stderr of run_journal go to `cad/logs/<journal>.log`. stdout of `nx-run` is one JSON
   summary. Exit 0 = ok, 1 = NX / journal error or timeout, 2 = usage error.
+- **Denied journals (ADR 0004).** Before NX starts, the journal and every other `.py` under
+  `cad/` (importable by the journal) are matched against `backend.yaml` `denied_tools`
+  (`tool: recadbench nx-run`, `args_regex` searched in `json.dumps({"command", "journal"})`):
+  journal code that imports or analyses the scan inside NX (NXOpen.Facet / faceted bodies,
+  convergent bodies, Fit Surface, STL/OBJ/PLY/3MF import, mesh libraries, the workspace `input/`
+  folder) is refused, exit 1, `denied: true`, the part untouched. Best-effort on free-form code;
+  `extract` still reports facet / convergent / imported bodies as unmapped.
 - Timeout default 120 s (`--timeout`, `RECADBENCH_NX_TIMEOUT_S`); only the run_journal process
   started here (and its child processes) is killed, never NX by name.
 - The run_journal exit code is not trusted (NX 2206 returns 1 after correct journals); the verdict
@@ -72,7 +79,7 @@ sketch's own datum CSYS, `MASTER SNAPSHOT BODY`) are not history steps and are s
 | `EdgeBlend` (BLEND), `FaceBlend` | fillet | yes |
 | `Chamfer`, `Shell`, `Draft` / `DraftBody`, `Rib` | chamfer, shell, draft, rib | yes |
 | `PatternFeature` (Pattern Feature) layout Linear / Circular (read from its edit builder) | pattern_linear / pattern_circular | yes (seed counted separately) |
-| `Mirror` (Mirror Feature) | mirror | yes |
+| `Mirror` (Mirror Feature), `MirrorBody` (MIRROR: Extract Geometry > Mirror Body, one node) | mirror | yes |
 | `Geomcopy` (Mirror / Pattern Geometry) layout Mirror / Translate / Rotate | mirror / pattern_linear / pattern_circular | yes |
 | `Block`, `Cylinder`, `Cone`, `Sphere` | primitive | yes |
 | `BooleanFeature` (UNITE / SUBTRACT / INTERSECT) | boolean | yes, unless it only merges a single-feature operand (subtract: tool has 1 counted feature; unite / intersect: body or tool has ≤ 1), then `counted: false` — same rule as build123d / FreeCAD. Operands from `Feature.GetParents()` (target first, measured); each operand = the counted features in that parent's closure (an unrelated earlier body is not part of the target), folded booleans in tree order no longer count |
@@ -80,11 +87,18 @@ sketch's own datum CSYS, `MASTER SNAPSHOT BODY`) are not history steps and are s
 | `SketchFeature`, associative curve features | sketch | no |
 | `DatumPlaneFeature`, `DatumCsys` / `DatumAxisFeature` / `PointFeature` | datum_plane / datum_axis / datum_point | no |
 | user-named expressions | `parameters[]` | — |
-| `Brep` (BREP / UNPARAMETERIZED_FEATURE: Remove Parameters, imported bodies), STEP-import rows (class `Feature` / `BodyFeature`, type = file name, `COMPOUND`), `ExtractFace` (EXTRACT_BODY), linked bodies, Move Object, synchronous edits, Trim / Split Body, other pattern layouts, assembly components, facet bodies without an associated body (STL imported as a JT facet body: no feature row), **any unknown class** | — | **unmapped ⇒ gate fail** |
+| `Brep` (BREP / UNPARAMETERIZED_FEATURE: Remove Parameters, imported bodies), STEP-import rows (class `Feature` / `BodyFeature`, type = file name, `COMPOUND`), `ExtractFace` (EXTRACT_BODY), linked bodies, Move Object, synchronous edits, Trim / Split Body, surface features `BoundedPlane` (SKIN), `Sew` (SEW), `Thicken` (THICKEN_SHEET), `TrimSheet` (TRIMMED_SH), `ExtendSheet` (EXTEND_SHEET), `LawExtensionEx` (LAWEXTENSION), `TrimAndExtend` (TRIM_AND_EXTEND) - no spec 0.3.0 taxonomy type, reason "not countable in v1" (measured H4 fixer 2), other pattern layouts, assembly components, facet bodies without an associated body (STL imported as a JT facet body: no feature row), **any unknown class** | — | **unmapped ⇒ gate fail** |
 
 - A counted feature that does not contribute to the single result solid (`Body.GetFeatures()`
   timestamps) is listed in `not_in_final_part` and not counted. Suppressed / rolled-back rows are
-  skipped.
+  listed in `excluded` (neither counted nor unmapped).
+- features.json follows spec 0.3.0 (ADR 0004 section 4): `bodies` = journal identifiers of the
+  solid bodies, `final_part` names the single solid, plus the adapter-specific `sheets` /
+  `facet_bodies` counts.
+- Replays read their spec 0.3.0 IR (`replays/_ir.py`, no NXOpen): every IR parameter becomes a
+  named expression, `{"ref"}` numbers become expression names in formulas, and
+  `pattern_circular` follows ADR 0004 (`angle_deg` = total sweep: 360 -> NX Span 360, partial
+  sweep -> Offset pitch `angle_deg / count`; `pitch_deg` -> Offset pitch).
 - Conformance C09: NX's Mirror Feature of a body-creating extrude yields a second body, so the
   replay unites it; that Unite merges one feature (the mirror) and is folded. Count 3 as on every
   backend.
