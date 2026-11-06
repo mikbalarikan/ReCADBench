@@ -39,7 +39,9 @@ def repo_files(root: Path) -> list[str]:
     try:
         out = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            cwd=root, capture_output=True, check=True,
+            cwd=root,
+            capture_output=True,
+            check=True,
         ).stdout
         return [f for f in out.decode().split("\0") if f]
     except (OSError, subprocess.CalledProcessError):
@@ -58,8 +60,11 @@ def main(argv: list[str]) -> int:
     for f, reason in bad:
         print(f"check_public: REJECT {f}: {reason}", file=sys.stderr)
     if bad:
-        print(f"check_public: {len(bad)} forbidden file(s). Part data and GT belong in the "
-              "private recadbench-data / recadbench-gt repos.", file=sys.stderr)
+        print(
+            f"check_public: {len(bad)} forbidden file(s). Part data and GT belong in the "
+            "private recadbench-data / recadbench-gt repos.",
+            file=sys.stderr,
+        )
         return 1
     print(f"check_public: OK ({len(files)} files checked)")
     return 0
