@@ -17,6 +17,7 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — H3 review fixes: freecad `denied_tools` now covers `create_macro` (same args_regex as `execute_python`; the code is visible) and denies `run_macro` outright (list re-derived from freecad-robust-mcp 0.6.1 `freecad_mcp/tools/*.py`); FreeCAD / build123d code regexes are case-sensitive and import-shaped (a variable `points`, "mesh" in a comment, `export_stl` to an output path stay allowed), JSON-aware word boundaries, + `input/` path references; ADR 0004 says args_regex on free-form code is best-effort; +21 deny cases. Migration keeps a `{ref}` pitch binding (`pitch_deg: {ref}`), notes dropped bindings, wraps scalar `number_list` values and fails with a named error on other values the 0.3.0 typed params reject (docstring/ADR no longer claim pure widening).
 - 2026-11-06 — H3 / ADR 0004, recadbench-spec **0.3.0**: `{"ref"}` for every sketch number; taxonomy `params: {name: type}` (12 types + enums, `$defs/ptype_*`, compiled IR schema type-checks them, semantic id resolution by type); `pattern_circular.angle_deg` = total sweep (step = angle/count, 360 = full circle) + new `pitch_deg`, `recadbench_spec.circular_offsets`; features.schema `not_in_final_part` / `excluded` / `final_part` / `bodies`; backend.yaml `denied_tools` [{tool prefix, args_regex?, reason}] filled for build123d / freecad / solidcraft; `recadbench_spec.migrate` + `recadbench-spec migrate` / `validate --migrate` (0.2.0 circular angle needs pitch|span|sweep). build123d execute-ir on 0.3.0 (sketch refs drive set-param, new pattern semantics). `dataset/tools/check_gt_patterns.py` + host-only test: all 6 pilot patterns match gt.step after migration (it caught a wrong HS04 pad seed, fixed in ReCADBench-gt). Re-validated: spec examples, 10 conformance IRs, 3 backend.yaml (strict), pilot gt_plan/meta/key_dims, data task.yaml. No contract files exist yet in -cad-skills / -strategies.
 - 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
 - 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
@@ -36,10 +37,13 @@ Update at the end of every session.
 ### From P3 (backends)
 - ~~CAD MCPs expose RE analysis~~ → ADR 0004 `backend.yaml: denied_tools`. **P10 gate_hook must
   implement the matcher** (name prefix + `re.search(args_regex, json.dumps(args))`, see
-  `backends/tests/test_denied_tools.py`). Gaps: build123d `execute_file` and FreeCAD `run_macro`
-  bodies are invisible to the matcher (extract still flags imported geometry); the freecad list
-  was written from ADR 0003 / the adapter, re-check against freecad-robust-mcp `tools/list` in H1;
-  the solidcraft list was not checked against a live `tools/list` on this host (not installed).
+  `backends/tests/test_denied_tools.py`). **args_regex on free-form code is best-effort**: code
+  that builds module names / paths at runtime (e.g. `getattr(b, 'import_' + 'stl')` on a computed
+  path) and build123d `execute_file` script bodies are not caught. Residual-risk options for P10:
+  hide `input/` from the CAD process (only retk reads the scan), and/or fail a run whose
+  `extract` reports imported shells as `unmapped` / whose session holds Mesh::/Points:: objects.
+  FreeCAD `run_macro` is denied outright. The solidcraft list was not checked against a live
+  `tools/list` on this host (not installed).
 - **SolidCraft on Termux ARM64 is untested.** `termux` is not in solidcraft `hosts`; the test steps
   are in `backends/solidcraft/install.md` ("Termux test"). Run them on the phone before listing it.
 - **build123d on Termux stays on 0.10.0** (PoCAD route, install.md B) while the desktop/CI pin is

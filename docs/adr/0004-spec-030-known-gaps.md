@@ -96,9 +96,20 @@ denied_tools:
 (Python `re.search`) matches `json.dumps(arguments)`. Validator: MCP entries must be covered by
 `cad_prefixes.all`; the regex must compile; no duplicates; an MCP backend without the field
 warns. Filled for build123d, freecad and solidcraft; `backends/tests/test_denied_tools.py` pins
-representative allowed and denied calls. Not covered by name/argument matching (documented in
-each `backend.yaml`): build123d `execute_file` and FreeCAD `run_macro` bodies — adapter
-`extract` still reports any imported geometry as `unmapped`.
+representative allowed and denied calls (including ordinary modelling code that must stay
+allowed: a variable `points`, the word "mesh" in a comment, `export_stl` to an output path).
+FreeCAD `create_macro` gets the same `args_regex` as `execute_python` (its `code` argument is
+visible); `run_macro` is denied outright (only the name is visible at run time, and
+`execute_python` covers the same need). Regexes that use `\b` must account for the JSON text:
+a line break is the two characters `\n`, so an identifier at the start of a line is preceded by
+`n`; the shipped regexes use `(?:(?<!\w)|(?<=\\[nt]))` instead.
+**`args_regex` on free-form code tools (`execute`, `execute_python`, `create_macro`,
+`execute_file`) is best-effort**: it catches the documented loaders, import-shaped module use,
+load calls on mesh-file literals and references to the workspace `input/` folder, but not code
+that builds names or paths at runtime (e.g. `getattr(b, 'import_' + 'stl')` on a computed
+path), nor the body of an `execute_file` script. The scan is therefore not guaranteed to be
+loadable only through the listed patterns; residual detection is adapter `extract` (imported
+geometry is `unmapped`) and the P10 gate (open question: hide `input/` from the CAD process).
 
 ### 6. Versioning and migration
 `spec_version` const → `0.3.0` (task, IR); every `$id` → `…/0.3.0`; package 0.3.0.

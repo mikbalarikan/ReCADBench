@@ -43,8 +43,13 @@ adapter_cli:
 # ADR 0004: tools gate_hook denies because they import or analyse the scan inside the CAD session
 # (RE analysis goes through retk, identical for every backend). `tool` = tool-name prefix;
 # with args_regex only calls whose JSON arguments match are denied. Checked against
-# build123d-mcp 0.3.91 tools/list. Not covered: an execute_file script that imports the scan
-# (only its path is visible) -- extract still reports imported geometry as unmapped.
+# build123d-mcp 0.3.91 tools/list.
+# args_regex on free-form code (execute, execute_file) is BEST-EFFORT: it matches the mesh
+# loaders (import_stl, import_threemf, Mesher), imports of mesh libraries, a load-style call on a
+# mesh-file literal and any reference to the workspace input/ folder; exporting (export_stl to an
+# output path) is allowed. Code that builds names or paths at runtime, or an execute_file script
+# (only its path is visible), is not caught; extract still reports imported geometry as unmapped
+# (residual risk: STATUS open questions, P10).
 denied_tools:
 - tool: mcp__build123d__import_cad_file
   reason: imports a STEP/STL/3MF file (the scan) into the session
@@ -59,11 +64,11 @@ denied_tools:
 - tool: mcp__build123d__compare
   reason: compares shapes / files, e.g. the model against the scan (self-checks use retk self_deviation)
 - tool: mcp__build123d__execute
-  args_regex: '(?i)\b(import_stl|import_threemf|Mesher)\b|\.(stl|ply|obj|3mf)\b'
-  reason: code that loads a mesh (the scan) into the session
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import_stl|import_threemf|Mesher)\b|(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:trimesh|open3d|pymeshlab|meshio|pyvista|vtk|stl)\b|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: code that loads a mesh (the scan) into the session or reads the input/ folder
 - tool: mcp__build123d__execute_file
-  args_regex: '(?i)\.(stl|ply|obj|3mf)\b'
-  reason: executes a mesh file path
+  args_regex: '(?i)\.(stl|ply|obj|3mf)\b|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: executes a mesh file path or a script under input/
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
 conformance:

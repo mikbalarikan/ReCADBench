@@ -77,9 +77,14 @@ adapter_cli:
   replay: recad freecad replay
 # ADR 0004: tools gate_hook denies because they import or analyse the scan inside FreeCAD (RE
 # analysis goes through retk). `tool` = tool-name prefix; with args_regex only calls whose JSON
-# arguments match are denied. Not covered: run_macro (only the macro name is visible) --
-# extract still reports Mesh::/Points:: objects as unmapped. Re-check against the
-# freecad-robust-mcp 0.6.1 tools/list on every pin bump (H1).
+# arguments match are denied. Derived from the freecad-robust-mcp 0.6.1 tool modules
+# (freecad_mcp/tools/*.py); re-check on every pin bump (H1).
+# args_regex on free-form code (execute_python, create_macro) is BEST-EFFORT: it matches import-
+# shaped use of the Mesh / MeshPart / Points / ReverseEngineering modules (case-sensitive, so a
+# variable `points` or the word "mesh" in a comment is allowed), Mesh::/Points:: object types,
+# a load-style call on a mesh-file literal, and any reference to the workspace input/ folder.
+# Code that builds module names or paths at runtime is not caught; extract still reports
+# Mesh::/Points:: objects as unmapped (residual risk: STATUS open questions, P10).
 denied_tools:
 - tool: mcp__freecad__import_stl
   reason: imports a mesh (the scan) into the document
@@ -87,8 +92,13 @@ denied_tools:
   args_regex: '(?i)\.(stl|ply|obj|3mf)\b'
   reason: opens a mesh file (the scan) as a document
 - tool: mcp__freecad__execute_python
-  args_regex: '(?i)\.(stl|ply|obj|3mf|ast)\b|\b(Mesh|MeshPart|Points|ReverseEngineering)\b'
-  reason: Python that loads or analyses a mesh / point cloud (Mesh, MeshPart, Points, ReverseEngineering workbenches)
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:Mesh|MeshPart|Points|ReverseEngineering)\b|(?:(?<!\w)|(?<=\\[nt]))(?:Mesh|MeshPart|Points|ReverseEngineering)(?:\.[A-Za-z_]|::)|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|insert|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf|ast)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: Python that loads or analyses a mesh / point cloud (Mesh, MeshPart, Points, ReverseEngineering) or reads the input/ folder
+- tool: mcp__freecad__create_macro
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:Mesh|MeshPart|Points|ReverseEngineering)\b|(?:(?<!\w)|(?<=\\[nt]))(?:Mesh|MeshPart|Points|ReverseEngineering)(?:\.[A-Za-z_]|::)|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|insert|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf|ast)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: macro body (create_macro `code`) that loads or analyses a mesh / point cloud or reads the input/ folder
+- tool: mcp__freecad__run_macro
+  reason: the macro body is not visible at run time (only its name); execute_python does the same with its code checked
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
 conformance:
