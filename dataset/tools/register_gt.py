@@ -64,8 +64,8 @@ def run(args: argparse.Namespace) -> dict:
     known = meta["scan"].get("sha256") not in (None, "", "TODO")
     if known and meta["scan"]["sha256"] != digest:
         raise SystemExit(
-            f"meta.yaml scan.sha256 {meta['scan']['sha256'][:12]}… does not match {scan_file.name} "
-            f"({digest[:12]}…): refusing to run"
+            f"meta.yaml scan.sha256 {meta['scan']['sha256'][:12]}... does not match "
+            f"{scan_file.name} ({digest[:12]}...): refusing to run"
         )
 
     scan = scanreg.load_mesh(scan_file)
@@ -134,23 +134,27 @@ def write(part: Path, result: dict) -> None:
     known = scan_meta.get("sha256") not in (None, "", "TODO")
     if known and scan_meta["sha256"] != result["scan"]["sha256"]:
         raise SystemExit(
-            f"meta.yaml scan.sha256 {scan_meta['sha256'][:12]}… does not match "
+            f"meta.yaml scan.sha256 {scan_meta['sha256'][:12]}... does not match "
             f"{result['scan']['file']} "
-            f"({result['scan']['sha256'][:12]}…): refusing to overwrite"
+            f"({result['scan']['sha256'][:12]}...): refusing to overwrite"
         )
     scan_meta["sha256"] = result["scan"]["sha256"]
     scan_meta["triangles"] = result["scan"]["triangles"]
     for key in ("registration", "scan_floor", "observability"):
         meta[key] = result[key]
     meta_path.write_text(
-        yaml.safe_dump(meta, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        yaml.safe_dump(meta, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+        newline="\n",  # LF on every OS
     )
     pts, obs = result["_mask"]
     np.savez_compressed(
         part / "observability_mask.npz", gt_points=pts.astype(np.float32), observable=obs
     )
     report = {k: v for k, v in result.items() if k != "_mask"}
-    (part / "registration_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (part / "registration_report.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8", newline="\n"
+    )
 
 
 def validate(part: Path) -> list[str]:
@@ -190,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(printable, indent=2))
     if not result["registration"]["converged"]:
         print(
-            "WARNING: ICP did not converge — try --init pca or a manual initial transform",
+            "WARNING: ICP did not converge - try --init pca or a manual initial transform",
             file=sys.stderr,
         )
     if args.write:
