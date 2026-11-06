@@ -1,13 +1,16 @@
 # orchestrator/experiments
 
-Experiment definitions `*.yaml`, expanded by `recadbench-orch expand` (P10). The pilot
-(`pilot.yaml`) is written in H9 / P11.
+Experiment definitions `*.yaml`, expanded by `recadbench-orch expand` (P10). The first test
+(P11 pilot, written in H9): [`pilot.yaml`](pilot.yaml) - 54 runs; cost / wall-time estimate,
+assumptions and the zero-cost pipeline check in [`PILOT_ESTIMATE.md`](PILOT_ESTIMATE.md)
+(numbers regenerate with `python pilot_estimate.py pilot.yaml`; run count pinned by
+`orchestrator/tests/test_pilot.py`).
 
 ```yaml
 name: pilot                       # run-id prefix
 parts: [r385_hs01_motor_mount]    # or  split: dev  (reads <data>/splits/dev.txt)
 replicates: 1
-harness_level: H3                 # optional; compose default H3
+harness_level: H3                 # optional; default H1 (04_STRATEGIES)
 budgets: {max_turns: 200}         # optional overrides of task.yaml budgets
 refs: {strategy: origin/main}     # optional git refs; skillsets default to tag <b>-vN
 models:
