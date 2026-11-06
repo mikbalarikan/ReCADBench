@@ -32,7 +32,7 @@ change it relies on.
 2. Create a dev venv (Python >= 3.11): pip install -e ReCADBench/spec -e ReCADBench/evaluator -e ReCADBench/runner
    -e ReCADBench/backends -r ReCADBench/dataset/requirements.txt -e ReCADBench-strategies/toolkit[server,render,test]
    build123d==0.13.0 build123d-mcp==0.3.91 ruff pytest. Record exact versions in HANDOVER_PRIVATE.md.
-3. Review the open handover PRs (ReCADBench: P3; ReCADBench-strategies: P5) with an independent review subagent.
+3. Review the open handover PRs (ReCADBench #8: P3; ReCADBench-strategies #2: P5; ReCADBench-gt #4) with an independent review subagent.
    Run their suites locally. Fix or comment, then merge when green.
 4. Re-sync every working branch with main after the squash merges.
 ```
