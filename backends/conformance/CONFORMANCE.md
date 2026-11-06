@@ -42,6 +42,37 @@ Notes:
   The largest error is C04 at −0.0102 %, 10 times inside tolerance.
 - The build123d and freecad errors are below 1e-8 relative (shown as 0.0000 %).
 
+## NX run (P4, Windows host)
+
+**Run:** 2026-11-06, Windows 11 (ASUS evaluator host), Siemens NX 2206 (`run_journal.exe`,
+embedded Python 3.10.9), `python backends/conformance/run_conformance.py --backend nx --backend
+build123d` (adapter / dispatcher in CPython 3.13, build123d 0.13.0 for the STEP read-back). NX calls
+are serialised by the runner's host lock (`max_parallel: 1`): 30 NX processes, about 15 min wall
+time. **Result: PASS.** nx 10/10, build123d 10/10 (same run), cross-backend counts and types
+identical for every case.
+
+| Case | Expected n | nx vol err / n / set-param | Faces = expected | Types in IR order |
+|---|---|---|---|---|
+| C01_block | 1 | 0.0000 % / 1 / ok (0.0000 %) | yes | yes |
+| C02_through_hole | 2 | 0.0000 % / 2 / ok (0.0000 %) | yes | yes |
+| C03_counterbore | 2 | 0.0000 % / 2 / ok (0.0000 %) | yes | yes |
+| C04_revolve_groove | 2 | 0.0000 % / 2 / ok (0.0000 %) | yes | yes |
+| C05_rect_pattern | 3 | 0.0000 % / 3 / ok (0.0000 %) | yes | yes |
+| C06_circ_pattern | 3 | 0.0000 % / 3 / ok (0.0000 %) | yes | yes |
+| C07_fillet_chamfer | 3 | 0.0000 % / 3 / ok (0.0000 %) | yes | yes |
+| C08_shell | 2 | 0.0000 % / 2 / ok (0.0000 %) | yes | yes |
+| C09_mirror_bracket | 3 | 0.0000 % / 3 / ok (0.0000 %) | yes | yes |
+| C10_draft_pocket | 3 | 0.0000 % / 3 / ok (0.0000 %) | yes | yes |
+| **Passed** | | **10/10** | | |
+
+All NX errors are below 2.3e-9 relative (volume from NX mass properties at accuracy 0.999999,
+cross-checked by a build123d read-back of the exported AP242 STEP within 1e-5). The replay runs
+through the same `nx_wrapper.py` as an agent's `recadbench nx-run`, so the conformance run also
+exercises the agent path. C09: NX's Mirror Feature of a body-creating extrude makes a second body;
+the replay unites it and the counter folds that single-feature Unite into the mirror (README of
+`backends/nx`). C04 `shaft_len` is a sketch dimension expression; set-param edits it like any
+other user expression.
+
 ## Reproduce
 
 ```bash
@@ -49,6 +80,7 @@ pip install -e ./spec -e ./backends            # dispatcher + recadbench-spec (+
 export RECAD_BUILD123D_PYTHON=<b3d-env>/bin/python
 export RECAD_FREECAD_PYTHON=<freecad-env>/bin/python
 export RECAD_SOLIDCRAFT_CLI=<path>/solidcraft-cli
+# nx: Windows host with NX 2206 (backends/nx/install.md); found via UGII_BASE_DIR
 recad backends                                  # which environments are usable here
 python backends/conformance/run_conformance.py --out /tmp/conformance.json
 ```

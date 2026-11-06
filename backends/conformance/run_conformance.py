@@ -36,7 +36,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 BACKENDS_DIR = HERE.parent
 CASES_DIR = HERE / "ir_cases"
-ALL_BACKENDS = ("build123d", "freecad", "solidcraft")
+ALL_BACKENDS = ("build123d", "freecad", "solidcraft", "nx")
 # Runs recad_cli from this checkout without putting backends/ on PYTHONPATH (that would expose
 # backends/build123d/ as a namespace package to every child interpreter).
 _BOOT = (f"import sys; sys.path.insert(0, {str(BACKENDS_DIR)!r}); "
