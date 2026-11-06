@@ -32,8 +32,8 @@ dev-only, there's a registration step, a noise floor and observability.
 | ADR 0002 real scans | ✅ accepted | `docs/adr/0002-real-scan-input.md`, D10 |
 | P6 tooling | ✅ `register_gt.py`, `make_task.py`, `scanreg.py`, AUTHORING.md, Windows fixes (#7) | `dataset/tools/`, `ReCADBench-gt/AUTHORING.md` |
 | P6 pilots | ✅ 3 R385 scan-rebuild parts (human NX ground truth), registered, in `-gt` and `-data` | `ReCADBench-gt/parts/`, `ReCADBench-data/parts/` |
-| **P3 backends** | 🟡 built in the cloud session (build123d, FreeCAD, Solidcraft adapters, 10 conformance cases, `recad` CLI). **Review and merge the PR, then re-run conformance on the ASUS** | PR in `ReCADBench` (see §5) |
-| **P5 retk** | 🟡 built in the cloud session (7 tools + MCP server). **Review and merge the PR, then check on Termux** | PR in `ReCADBench-strategies` |
+| **P3 backends** | 🟡 built in the cloud session (build123d, FreeCAD, Solidcraft adapters, 10 conformance cases, `recad` CLI). **Review and merge the PR, then re-run conformance on the ASUS** | `ReCADBench` #8 |
+| **P5 retk** | 🟡 built in the cloud session (7 tools + MCP server). **Review and merge the PR, then check on Termux** | `ReCADBench-strategies` #2 |
 | P4 NX backend + harness port | ⬜ needs the desktop (NX 2206, your existing NX harness files) | `backends/nx/`, `ReCADBench-cad-skills/nx/` |
 | P7 evaluator | ⬜ | `evaluator/` |
 | P8 skillsets v1 | ⬜ | `ReCADBench-cad-skills` |
@@ -102,8 +102,9 @@ Pilot ground-truth numbers (scan-to-GT, mm; all converged; tolerance class B):
 ## 5. Open items at handover
 
 - **PRs to review and merge first** (opened by the cloud session at handover):
-  - `ReCADBench`: P3 backends + conformance;
-  - `ReCADBench-strategies`: P5 retk.
+  - `ReCADBench` #8: P3 backends + conformance + these handover docs;
+  - `ReCADBench-strategies` #2: P5 retk;
+  - `ReCADBench-gt` #4: HANDOVER_PRIVATE.md.
 
   Re-run their test suites on the ASUS before merging.
 - **P3 on the desktop:**
