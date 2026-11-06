@@ -18,7 +18,7 @@ Available data (2026-11-05):
 | Set | Parts | Scan | GT | Provenance |
 |---|---|---|---|---|
 | R385 diaphragm pump (owner's desktop) | 8 shortlisted | owner's own scans, private | owner's NX rebuild (`.prt` with feature tree + `.stp`), **human** | replica of a commercial part; public RS-385 CAD exists |
-| `mikbalarikan/open-dedica` (public, CC BY 4.0) | 14 (≈11 usable; PCBs out) | public raw STLs (Creality CR-Scan Raptor) | build123d STEPs made **by agents** with the stl-re skills; most verdicts `BAND_NOT_MET`, accepted by owner | public scan + public CAD; commercial (commercial product) parts |
+| `mikbalarikan/open-dedica` (public, CC BY 4.0) | 14 (≈11 usable; PCBs out) | public raw STLs (Creality CR-Scan Raptor) | build123d STEPs made **by agents** with the stl-re skills; most verdicts `BAND_NOT_MET`, accepted by owner | public scan + public CAD; commercial-product parts |
 | `agentic_STL-to-CAD/golden-examples` (private) | 5 | mixed | successful RE projects | not yet cleared (some may be client work) |
 | OGUZ own designs (inventory, 32) | — | **none yet**; owner can print + scan | original NX design | own design, private |
 
