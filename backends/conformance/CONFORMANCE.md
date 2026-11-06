@@ -15,7 +15,7 @@ for both.
 | Backend | Version under test (both hosts) | windows install | linux install |
 |---|---|---|---|
 | build123d | build123d 0.13.0 (OCP 8, cadquery-ocp-novtk 8.0.1.1), pin build123d-mcp 0.3.91 | pip venv, CPython 3.13 | pip venv, CPython 3.13 |
-| freecad | FreeCAD 26.3.0 20260916 (a4ce44d33, occt 8.0.1), pin freecad-robust-mcp 0.6.1 | conda-forge `freecad=2026.09.16` win-64 `py311h48521fb_0`, CPython 3.11 | conda-forge linux-64, CPython 3.11 |
+| freecad | FreeCAD weekly-2026.09.16 development build (git a4ce44d33, reports 26.3.0 dev; predates 26.3rc1, not a release), occt 8.0.1, pin freecad-robust-mcp 0.6.1 | conda-forge `freecad=2026.09.16` win-64 `py311h48521fb_0`, CPython 3.11 | conda-forge linux-64, CPython 3.11 |
 | solidcraft | solidcraft-cli 0.30.1 | release `solidcraft-0.30.1-windows-x64-portable.zip` (sha256 matches the release `SHA256SUMS.txt`), adapter on CPython 3.13 | source build (rustc 1.97.0), CPython 3.13 |
 
 The volume error is `(replay STEP volume − expected) / expected`. `set-param` is the expected
@@ -48,10 +48,10 @@ Notes:
   same STEP measured with OCP is within 1.3e-8 of expected (`../solidcraft/adapter/README.md`).
   The largest error is C04 at −0.0102 %, 10 times inside tolerance.
 - The build123d and freecad errors are below 1e-8 relative (shown as 0.0000 %).
-- windows, not the pin: the official FreeCAD 1.1.1 Windows bundle (`bin\python.exe`) also
+- windows, not the pin: the official stable FreeCAD 1.1.1 Windows bundle (1.1.4 not tested) (`bin\python.exe`) also
   passes 10/10 with the same counts (`--backend freecad`).
 - Adapter test suites on windows: `backends/tests` + `backends/build123d/tests` +
-  `backends/solidcraft/tests` 142 passed; `backends/freecad/tests` 43 passed (FreeCAD 26.3 env).
+  `backends/solidcraft/tests` 142 passed; `backends/freecad/tests` 43 passed (FreeCAD weekly-2026.09.16 env).
 
 ## MCP tool lists
 

@@ -1,12 +1,12 @@
 # freecad backend — install
 
-L1 = FreeCAD 26.3 (unmodified) + the **freecad-robust-mcp** server and its **RobustMCPBridge**
+L1 = FreeCAD weekly-2026.09.16 development build (unmodified; reports 26.3.0, see the note below) + the **freecad-robust-mcp** server and its **RobustMCPBridge**
 running headless in `freecadcmd` (choice and evaluation: [ADR 0003](../../docs/adr/0003-freecad-mcp-selection.md)).
 The pins are in [`backend.yaml`](backend.yaml).
 
 | Component | Pin | Where it runs |
 |---|---|---|
-| FreeCAD | 26.3.0 (conda-forge `freecad=2026.09.16`, Python 3.11, OCCT 8.0.1) | worker |
+| FreeCAD | weekly-2026.09.16 dev build, git `a4ce44d33`, reports 26.3.0 (conda-forge `freecad=2026.09.16`, Python 3.11, OCCT 8.0.1) | worker |
 | MCP server | PyPI `freecad-robust-mcp==0.6.1` + `mcp<2` (1.30.0 tested), dedicated venv, Python ≥ 3.11 | worker, launched by the agent's MCP client over stdio |
 | Bridge | `addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py` at git tag `robust-mcp-workbench-v0.6.1` | inside `freecadcmd`, one process per run |
 | Adapter | `backends/freecad/adapter/adapter.py` (this repo) | FreeCAD's own Python, clean process |
@@ -15,7 +15,7 @@ The pins are in [`backend.yaml`](backend.yaml).
 ## Linux (conda-forge route, used for the P3 conformance run)
 
 ```bash
-# 1. FreeCAD 26.3 headless (no display needed)
+# 1. FreeCAD weekly-2026.09.16 dev build, headless (no display needed)
 export MAMBA_ROOT_PREFIX=$HOME/.recad/mamba
 curl -fsSL -o micromamba https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-linux-64
 chmod +x micromamba
@@ -61,12 +61,16 @@ The bridge listens on localhost only and has no authentication in 0.6.1, so neve
 
 ## Windows (verified 2026-11-06, Windows 11 x64)
 
-FreeCAD/FreeCAD has no 26.3 final release yet (26.3rc1/rc2 only), so the pin is the same
-conda-forge build as on Linux. Any conda / mamba / micromamba works; no activation is needed for
-the adapter.
+What the pin is: conda-forge `freecad=2026.09.16` is built from the upstream tag
+`weekly-2026.09.16` (commit `a4ce44d33b7e`), a development snapshot that predates 26.3rc1
+(2026-10-08) and 26.3rc2 (2026-10-18). It is not a release or release candidate; "26.3.0" is the
+development branch's version number. Latest stable upstream is 1.1.4 (2026-09-28). The pin is kept
+because the identical build exists on linux-64 and win-64 and both conformance runs used it;
+re-pinning is an open question in `STATUS.md`. Any conda / mamba / micromamba works; no activation
+is needed for the adapter.
 
 ```powershell
-# 1. FreeCAD 26.3 (conda-forge win-64 build py311h48521fb_0, occt 8.0.1)
+# 1. FreeCAD weekly-2026.09.16 dev build (conda-forge win-64 py311h48521fb_0, occt 8.0.1)
 conda create -y --prefix <tools>\freecad\fc263 -c conda-forge --override-channels `
       freecad=2026.09.16 python=3.11 pytest
 $FC = "<tools>\freecad\fc263"
@@ -93,7 +97,7 @@ itself does not need it.
 freecad-robust-mcp 0.6.1 connects to the bridge during `initialize` and exits when none is
 listening, so even a `tools/list` needs a running bridge.
 
-Not the pin, but also checked: the official FreeCAD 1.1.1 Windows bundle
+Not the pin, but also checked: the official stable FreeCAD 1.1.1 Windows bundle (1.1.4 not tested)
 (`...\FreeCAD 1.1\bin\python.exe`, FreeCAD.pyd next to it) passes conformance 10/10 with the
 same counts. The bundle's `python.exe` has no pip, so its tests need `python.exe -m ensurepip`
 first.

@@ -11,13 +11,17 @@ software:
     source: https://github.com/spkane/freecad-robust-mcp-and-more
     ref: robust-mcp-workbench-v0.6.1
   freecad:
-    version: '26.3'
-    build: 26.3.0 20260916 (a4ce44d3)
-    # Windows (2026-11-06): the same conda-forge build, win-64 py311h48521fb_0 (occt 8.0.1), reports
-    # 26.3.0 20260916 a4ce44d33. Kept this pin: FreeCAD/FreeCAD has no 26.3 final release yet
-    # (26.3rc1/rc2 only), so the conda-forge 2026.09.16 build is the one reproducible 26.3 on both
-    # hosts. The official FreeCAD 1.1.1 Windows bundle also passes conformance 10/10 with identical
-    # counts, but it is not the pin.
+    version: 26.3.0-dev
+    build: FreeCAD weekly-2026.09.16 development build (git a4ce44d33, reports 26.3.0 dev)
+    # This is NOT a 26.3 release or release candidate: conda-forge freecad=2026.09.16 is built from
+    # the upstream tag weekly-2026.09.16 (commit a4ce44d33b7e), a pre-RC development snapshot three
+    # weeks older than 26.3rc1 (2026-10-08, faa2c25b) and 26.3rc2 (2026-10-18, 9fb16e7f). "26.3.0"
+    # is only the version number of the development branch. Latest stable upstream is 1.1.4
+    # (2026-09-28). Kept for P3/H1 because the same conda-forge build exists on linux-64 and win-64
+    # and both conformance runs used it; re-pinning (26.3rc2, 26.3 final or stable 1.1.4) is an open
+    # question for the main session (STATUS.md). Windows (2026-11-06): win-64 py311h48521fb_0 (occt
+    # 8.0.1). The official FreeCAD 1.1.1 Windows bundle (stable, older than 1.1.4) also passes
+    # conformance 10/10 with identical counts; 1.1.4 was not tested.
     source: conda-forge freecad=2026.09.16 python=3.11 (linux-64 and win-64; occt 8.0.1)
 interface:
   kind: mcp
@@ -90,4 +94,4 @@ conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: FreeCAD 26.3.0 (conda-forge 2026.09.16, Python 3.11, occt 8.0.1); hosts linux x86_64 + windows x64
+  software_version: FreeCAD weekly-2026.09.16 dev build (git a4ce44d33, reports 26.3.0; conda-forge freecad=2026.09.16, Python 3.11, occt 8.0.1); hosts linux x86_64 + windows x64
