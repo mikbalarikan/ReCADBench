@@ -19,6 +19,8 @@ measure = ["build123d==0.13.0"]
 
 [project.scripts]
 recad = "recad_cli.cli:main"
+# agent-facing NX runner (05_TOOLS `recadbench nx-run`); P10 folds it into the runner CLI
+recadbench = "recad_cli.recadbench:main"
 
 [tool.setuptools.packages.find]
 # Only the dispatcher is a Python package. The backend folders (build123d/, freecad/, …) are

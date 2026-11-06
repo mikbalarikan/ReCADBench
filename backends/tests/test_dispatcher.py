@@ -143,9 +143,22 @@ def test_solidcraft_requires_the_cli(fake, capsys, monkeypatch):
     assert rc == 1 and "RECAD_SOLIDCRAFT_CLI" in res["error"]
 
 
-def test_nx_has_no_adapter_yet(fake, capsys):
+def test_nx_without_adapter_folder(fake, capsys):
     rc, res = recad(capsys, "nx", "export", "p.prt", "--out", "o.step")
-    assert rc == 1 and res["ok"] is False
+    assert rc == 1 and res["ok"] is False and "no adapter" in res["error"]
+
+
+def test_nx_is_routed_to_its_adapter(fake, capsys, monkeypatch):
+    (fake / "backends" / "nx" / "adapter").mkdir(parents=True)
+    (fake / "backends" / "nx" / "adapter" / "adapter.py").write_text(FAKE_ADAPTER)
+    monkeypatch.setenv("RECAD_NX_PYTHON", sys.executable)
+    monkeypatch.setenv("FAKE_RESULT", json.dumps({"ok": True, "count": 1}))
+    feats = valid_features(1) | {"tool": "nx", "native_file": "native.prt"}
+    monkeypatch.setenv("FAKE_FEATURES", json.dumps(feats))
+    rc, res = recad(capsys, "nx", "extract", "native.prt", "--out", str(fake / "f.json"))
+    assert rc == 0 and res["backend"] == "nx" and res["features_valid"] is True
+    assert json.loads((fake / "argv.json").read_text()) == ["extract", "native.prt", "--out",
+                                                            str(fake / "f.json")]
 
 
 def test_timeout(fake, capsys, monkeypatch):
@@ -317,3 +330,14 @@ def test_console_output_is_ascii(argv):
     assert b"Traceback" not in proc.stderr, proc.stderr
     assert (proc.stdout + proc.stderr).isascii()
     assert proc.returncode in (0, 2)
+
+
+def test_recadbench_entry_routes_nx_run(tmp_path, monkeypatch, capsys):
+    from recad_cli import recadbench
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "j.py").write_text("pass\n")
+    assert recadbench.main(["nx-run", "j.py"]) == 2  # not under cad/: usage error from nx_run
+    assert "under" in json.loads(capsys.readouterr().out)["error"]
+    assert recadbench.main(["compose"]) == 2
+    assert recadbench.main([]) == 2

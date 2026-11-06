@@ -10,7 +10,8 @@ execute-ir for build123d). The adapter runs in a fresh subprocess with the backe
     freecad     RECAD_FREECAD_PYTHON     (required: a Python that can import FreeCAD)
     solidcraft  RECAD_SOLIDCRAFT_PYTHON  (default: this interpreter, >= 3.11)
                 RECAD_SOLIDCRAFT_CLI     (default: `solidcraft-cli` on PATH)
-    nx          no adapter yet (P4)
+    nx          RECAD_NX_PYTHON          (default: this interpreter, >= 3.11; NX itself is
+                                          found via RECADBENCH_NX_RUN_JOURNAL / UGII_BASE_DIR)
 
 Other environment: RECAD_BACKENDS_DIR (folder holding <backend>/adapter/adapter.py; default:
 the source tree this package lives in), RECAD_TIMEOUT_S (per adapter call, default 1800).
@@ -81,7 +82,7 @@ BACKENDS: dict[str, Backend] = {
     "build123d": Backend("build123d", "RECAD_BUILD123D_PYTHON", False, _PROBE_BUILD123D, "py"),
     "freecad": Backend("freecad", "RECAD_FREECAD_PYTHON", True, _PROBE_FREECAD, "FCStd"),
     "solidcraft": Backend("solidcraft", "RECAD_SOLIDCRAFT_PYTHON", False, _PROBE_PY311, "json"),
-    "nx": Backend("nx", None, True, None, "prt", note="adapter not implemented yet (P4)"),
+    "nx": Backend("nx", "RECAD_NX_PYTHON", False, _PROBE_PY311, "prt"),
 }
 
 
@@ -152,12 +153,13 @@ def check_backend(b: Backend, timeout: float = 120.0) -> dict[str, Any]:
                 tail = (proc.stderr.strip().splitlines() or ["probe failed"])[-1]
                 raise EnvError(f"probe failed in {py}: {tail}")
             info["version"] = proc.stdout.strip().splitlines()[-1]
-        if b.id == "solidcraft":
+        if b.id in ("solidcraft", "nx"):
             proc = subprocess.run([py, str(adapter_path(b)), "version"], capture_output=True,
                                   text=True, timeout=timeout, env=env)
             res = _last_json(proc.stdout) or {}
             if proc.returncode != 0 or not res.get("ok"):
-                raise EnvError(f"solidcraft-cli did not start: {res.get('error', proc.stderr)}")
+                what = "solidcraft-cli did not start" if b.id == "solidcraft" else "NX not usable"
+                raise EnvError(f"{what}: {res.get('error', proc.stderr)}")
             info["version"] = res.get("version")
         info["available"] = True
     except (EnvError, OSError, subprocess.TimeoutExpired) as exc:

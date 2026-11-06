@@ -11,5 +11,6 @@ select = ["E", "F", "I", "B", "UP"]
 addopts = "--import-mode=importlib"
 # backends: dispatcher + build123d adapter run here; FreeCAD / SolidCraft adapter tests need their
 # own environments (backends/freecad/install.md, backends/solidcraft/install.md) and skip without.
+# backends/nx/tests: the NX host part skips without run_journal.exe (CI runs the pure part).
 testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "dataset/tests",
-             "backends/tests", "backends/build123d/tests"]
+             "backends/tests", "backends/build123d/tests", "backends/nx/tests"]
