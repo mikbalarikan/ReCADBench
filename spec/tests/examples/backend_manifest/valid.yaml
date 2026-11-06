@@ -29,3 +29,11 @@ conformance:
   total: 10
   date: '2026-11-05'
   software_version: 0.3.91
+denied_tools:
+- tool: mcp__build123d__import_cad_file
+  reason: imports the scan into the CAD session
+- tool: mcp__build123d__mesh_
+  reason: mesh analysis of the scan (RE analysis goes through retk)
+- tool: mcp__build123d__execute
+  args_regex: import_stl
+  reason: code that loads the scan

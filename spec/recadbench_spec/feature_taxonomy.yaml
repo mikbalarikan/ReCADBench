@@ -1,4 +1,4 @@
-# Canonical feature taxonomy + counting rule. spec v0.2.0 (unchanged since 0.1.0)
+# Canonical feature taxonomy + counting rule. spec v0.3.0 (ADR 0004: typed params)
 # Every tool adapter maps native feature types to these keys.
 # Counting: each item below counts as 1 feature per native command, regardless of how many
 # edges/faces/instances it touches. A pattern/mirror counts 1 (its seed feature counts separately).
@@ -15,23 +15,79 @@ counting_rule:
     - "Non-parametric bodies (dumb solids, raw kernel shapes, imported geometry) are NOT features: adapters report them as unmapped ⇒ gate fail."
     - "Cross-tool consistency is enforced by the conformance suite: the same IR case must yield the same count in every tool."
 
+# Param value types (spec 0.3.0). Each name maps to the IR schema definition `$defs/ptype_<name>`;
+# `{enum: [...]}` lists the allowed strings. `{"ref": parameter}` is accepted wherever a number is
+# (types number, count, number_list) and in every sketch number.
+param_types:
+  number: "number or {ref}"
+  count: "integer >= 1 or {ref} to an integer-valued parameter"
+  boolean: "true / false"
+  string: "free text"
+  vec3: "[x, y, z]"
+  vec3_list: "non-empty list of [x, y, z] points"
+  number_list: "non-empty list of numbers / {ref}s"
+  selector: "one selector (datum / plane / feature id or face selector)"
+  selectors: "one selector or a non-empty list of selectors"
+  direction: "[x, y, z] vector or a datum / plane / face selector"
+  feature_id: "id of an earlier feature"
+  feature_ids: "non-empty list of earlier feature ids"
+
 types:
-  primitive:      { params: [shape, size, center, axis], needs_sketch: false, note: "box/cylinder/sphere/cone/torus solid primitive (NX Block, build123d Box/Cylinder, Solidcraft primitives); counted 1 each" }
-  extrude:        { params: [distance, distance2, direction, taper_deg, symmetric], needs_sketch: true }
-  revolve:        { params: [angle_deg, axis], needs_sketch: true }
-  sweep:          { params: [path], needs_sketch: true }
-  loft:           { params: [sections], needs_sketch: false }
-  hole:           { params: [diameter, depth, through, kind, cb_diameter, cb_depth, csk_diameter, csk_angle_deg, positions], needs_sketch: false }
-  fillet:         { params: [radius, edges], needs_sketch: false }
-  chamfer:        { params: [distance, distance2, angle_deg, edges], needs_sketch: false }
-  shell:          { params: [thickness, open_faces], needs_sketch: false }
-  draft:          { params: [angle_deg, faces, neutral], needs_sketch: false }
-  rib:            { params: [thickness], needs_sketch: true }
-  boolean:        { params: [tool_feature], needs_sketch: false }
-  pattern_linear: { params: [features, direction, count, spacing, direction2, count2, spacing2], needs_sketch: false }
-  pattern_circular: { params: [features, axis, count, angle_deg], needs_sketch: false }
-  mirror:         { params: [features, plane], needs_sketch: false }
-  thread_cosmetic: { params: [designation, length], needs_sketch: false }
-  freeform_region: { params: [faces, max_patches], needs_sketch: false, note: "Tier 3 only; surface fit budget" }
+  primitive:
+    params: {shape: {enum: [box, cylinder, sphere, cone, torus]}, size: number_list, center: vec3, axis: direction}
+    needs_sketch: false
+    note: "box/cylinder/sphere/cone/torus solid primitive (NX Block, build123d Box/Cylinder, Solidcraft primitives); counted 1 each"
+  extrude:
+    params: {distance: number, distance2: number, direction: direction, taper_deg: number, symmetric: boolean}
+    needs_sketch: true
+  revolve:
+    params: {angle_deg: number, axis: direction}
+    needs_sketch: true
+  sweep:
+    params: {path: selector}
+    needs_sketch: true
+  loft:
+    params: {sections: selectors}
+    needs_sketch: false
+  hole:
+    params: {diameter: number, depth: number, through: boolean, kind: {enum: [simple, counterbore, countersink]},
+             cb_diameter: number, cb_depth: number, csk_diameter: number, csk_angle_deg: number, positions: vec3_list}
+    needs_sketch: false
+  fillet:
+    params: {radius: number, edges: selectors}
+    needs_sketch: false
+  chamfer:
+    params: {distance: number, distance2: number, angle_deg: number, edges: selectors}
+    needs_sketch: false
+  shell:
+    params: {thickness: number, open_faces: selectors}
+    needs_sketch: false
+  draft:
+    params: {angle_deg: number, faces: selectors, neutral: selector}
+    needs_sketch: false
+  rib:
+    params: {thickness: number}
+    needs_sketch: true
+  boolean:
+    params: {tool_feature: feature_id}
+    needs_sketch: false
+  pattern_linear:
+    params: {features: feature_ids, direction: direction, count: count, spacing: number,
+             direction2: direction, count2: count, spacing2: number}
+    needs_sketch: false
+  pattern_circular:
+    params: {features: feature_ids, axis: direction, count: count, angle_deg: number, pitch_deg: number}
+    needs_sketch: false
+    note: "ADR 0004: instance k = 0..count-1 (k = 0 is the seed) is rotated by k * step about axis, right-hand positive; step = angle_deg / count (angle_deg = total sweep, 360 = full circle, default) or step = pitch_deg (angle between neighbours). Give at most one of angle_deg / pitch_deg."
+  mirror:
+    params: {features: feature_ids, plane: selector}
+    needs_sketch: false
+  thread_cosmetic:
+    params: {designation: string, length: number}
+    needs_sketch: false
+  freeform_region:
+    params: {faces: selectors, max_patches: count}
+    needs_sketch: false
+    note: "Tier 3 only; surface fit budget"
 
 face_types: [plane, cylinder, cone, sphere, torus, bspline, other]
