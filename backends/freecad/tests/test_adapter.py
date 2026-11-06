@@ -256,3 +256,37 @@ def test_boolean_with_multi_feature_tool_is_counted(tmp_path):
 def test_usage_error_is_one_json_failure(args):
     res = run(*args, ok=False)
     assert res["error"].startswith("usage:"), res
+
+
+def test_scratch_body_features_are_not_counted(tmp_path):
+    # review PR #8: a second body with no solid (Tip cleared) had its features counted although
+    # they never reach the exported solid; count must cover the result body only.
+    native = _make_doc(tmp_path, """
+        sk = sketch(body, "XY_Plane")
+        rect(sk, 0, 0, 10, 10)
+        pad = body.newObject("PartDesign::Pad", "Pad")
+        pad.Profile = sk
+        pad.Length = 5
+        b2 = doc.addObject("PartDesign::Body", "Scratch")
+        sk2 = sketch(b2, "XY_Plane", name="Sketch2")
+        rect(sk2, 0, 0, 4, 4)
+        for i in range(3):
+            p = b2.newObject("PartDesign::Pad", f"Pad{i + 2}")
+            p.Profile = sk2
+            p.Length = 2 + i
+        doc.recompute()
+        b2.Tip = None
+    """)
+    out = tmp_path / "f.json"
+    res = run("extract", str(native), "--out", str(out))
+    feats = json.loads(out.read_text())
+    assert res["count"] == 1 and res["unmapped"] == 0, feats
+    assert len(feats["not_in_final_part"]) == 3
+    step = run("export", str(native), "--out", str(tmp_path / "x.step"))
+    assert abs(step["volume_mm3"] - 500.0) < 1e-6
+
+
+def test_written_files_use_lf(replayed):
+    # review PR #8: features.json was written with the platform newline (CRLF on Windows)
+    d, _ = replayed["C01_block"]
+    assert b"\r\n" not in (d / "features.json").read_bytes()
