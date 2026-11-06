@@ -11,12 +11,38 @@ Update at the end of every session.
 | H3 | Spec 0.3.0 (ADR 0004): sketch refs, typed params, pattern_circular, features keys, denied_tools, 0.2.0 migration | done (PR open; tag `spec-v0.3.0` + downstream pins after merge) |
 | P4 | NX backend (runner, adapter, replays) | todo |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
-| P7 | Evaluator + golden tests | todo |
+| P7 | Evaluator + golden tests | done (H5, PR h5-evaluator): recadbench-eval 0.1.0, synthetic golden tests in CI, R385 pilot goldens on the evaluator host (9/9) |
 | P10 | Runner, compose, gate_hook, orchestrator | todo |
 | P11 | Pilot + calibration, threshold ADR, spec-v1.0.0 | todo |
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — H5 / P7: **recadbench-eval 0.1.0** (`evaluator/`). Gate (load, 1 solid, valid, closed, faceted, principal-extent scale check vs GT, features.json present + `unmapped` empty; aligned freeform cover-up for tier 1-2); alignment = `T_scan_to_gt` + trimmed point-to-plane ICP (fixed seed), 24-PCA fallback only when the 1 mm two-way F1 < 0.8; S1 two-way 50k samples, exact distances, observable region by nearest-neighbour lookup in `observability_mask.npz`, `band_eff = max(class band, k * floor p95)` (`k` = 1.5 in `EvalConfig`), inferred region reported; S2 from features.json (face-ratio + parametric-presence halvings, r > 3 caps the total at 40); S3 intrinsic key dims (nearest same-type face, axis within 2 deg), standard credit, coaxial / symmetry relations; S4 b1 (B-rep Euler characteristic) + face-type TVD; S5 behind `--s5` (reads `out/s5/edits.json`); plan score (Hungarian F1, key dims, datum rotated by T, count ratio, order); result.json validated against the spec schema, byte-identical on rerun; markdown/CSV report; CLI `recadbench-eval score|plan-score|report|golden`. GT only via `RECADBENCH_GT_DIR` (`gtstore.py`); no backend imports (tested). Golden tests: CI = 2 synthetic parts generated in-test (clean + scan rules with known T, floor, mask) x 6 candidates + unit tests (23 tests); evaluator host = 3 R385 pilots x 6 candidates (9 tests, ~2 min), results:
+
+  | part | candidate | gate | S1 | S2 | S3 | S4 | total | PASS | p_tight / p_wide obs | p_tight / p_wide inferred | band_eff tight / wide |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | hs01 | good | ok | 40 | 25 | 20 | 10 | 95.0 | yes | 1.000 / 1.000 | 1.000 / 1.000 | 0.293 / 0.300 |
+  | hs01 | wrong_dim (cbore_d 5.82 vs 5.85) | ok | 40 | 25 | 18.0 | 10 | 93.0 | yes* | 1.000 / 1.000 | 1.000 / 1.000 | 0.293 / 0.300 |
+  | hs01 | snap_everything (6 dims snapped) | ok | 40 | 25 | 10.0 | 9.9 | 84.9 | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.293 / 0.300 |
+  | hs01 | lego (r = 4) | ok | 40 | 0 | 20 | 10 | 40.0 (capped) | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.293 / 0.300 |
+  | hs01 | faceted | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.293 / 0.300 |
+  | hs01 | dumb_solid | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.293 / 0.300 |
+  | dr02 | good | ok | 40 | 25 | 20 | 10 | 95.0 | yes | 1.000 / 1.000 | 1.000 / 1.000 | 0.302 / 0.302 |
+  | dr02 | wrong_dim (pin_bore_d 2.17 vs 2.20) | ok | 40 | 25 | 18.0 | 10 | 93.0 | yes* | 1.000 / 1.000 | 1.000 / 1.000 | 0.302 / 0.302 |
+  | dr02 | snap_everything (2 dims snapped, 5 not movable) | ok | 40 | 25 | 16.0 | 10 | 91.0 | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.302 / 0.302 |
+  | dr02 | lego | ok | 40 | 0 | 20 | 10 | 40.0 (capped) | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.302 / 0.302 |
+  | dr02 | faceted | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.302 / 0.302 |
+  | dr02 | dumb_solid | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.302 / 0.302 |
+  | hs04 | good | ok | 40 | 25 | 20 | 10 | 95.0 | yes | 1.000 / 1.000 | 1.000 / 1.000 | 0.519 / 0.519 |
+  | hs04 | wrong_dim (boss_d 6.01 vs 6.04) | ok | 40 | 25 | 18.4 | 10 | 93.4 | yes* | 1.000 / 1.000 | 1.000 / 1.000 | 0.519 / 0.519 |
+  | hs04 | snap_everything (6 dims snapped) | ok | 40 | 25 | 13.6 | 10 | 88.6 | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.519 / 0.519 |
+  | hs04 | lego | ok | 40 | 0 | 20 | 10 | 40.0 (capped) | no | 1.000 / 1.000 | 1.000 / 1.000 | 0.519 / 0.519 |
+  | hs04 | faceted | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.519 / 0.519 |
+  | hs04 | dumb_solid | FAIL | 0 | 0 | 0 | 0 | 0 | no | - | - | 0.519 / 0.519 |
+
+  \* wrong_dim passes under the 03_SCORING PASS rule (one wrong key dim of 8-10 is >= 80%); see the open questions.
+  Totals are out of 95 (S5 off). Candidates are generated in pytest temp dirs from gt.step (scanner frame via
+  inv(T_scan_to_gt)) and never written to the repo.
 - 2026-11-06 — H3 review fixes: freecad `denied_tools` now covers `create_macro` (same args_regex as `execute_python`; the code is visible) and denies `run_macro` outright (list re-derived from freecad-robust-mcp 0.6.1 `freecad_mcp/tools/*.py`); FreeCAD / build123d code regexes are case-sensitive and import-shaped (a variable `points`, "mesh" in a comment, `export_stl` to an output path stay allowed), JSON-aware word boundaries, + `input/` path references; ADR 0004 says args_regex on free-form code is best-effort; +21 deny cases. Migration keeps a `{ref}` pitch binding (`pitch_deg: {ref}`), notes dropped bindings, wraps scalar `number_list` values and fails with a named error on other values the 0.3.0 typed params reject (docstring/ADR no longer claim pure widening).
 - 2026-11-06 — H3 / ADR 0004, recadbench-spec **0.3.0**: `{"ref"}` for every sketch number; taxonomy `params: {name: type}` (12 types + enums, `$defs/ptype_*`, compiled IR schema type-checks them, semantic id resolution by type); `pattern_circular.angle_deg` = total sweep (step = angle/count, 360 = full circle) + new `pitch_deg`, `recadbench_spec.circular_offsets`; features.schema `not_in_final_part` / `excluded` / `final_part` / `bodies`; backend.yaml `denied_tools` [{tool prefix, args_regex?, reason}] filled for build123d / freecad / solidcraft; `recadbench_spec.migrate` + `recadbench-spec migrate` / `validate --migrate` (0.2.0 circular angle needs pitch|span|sweep). build123d execute-ir on 0.3.0 (sketch refs drive set-param, new pattern semantics). `dataset/tools/check_gt_patterns.py` + host-only test: all 6 pilot patterns match gt.step after migration (it caught a wrong HS04 pad seed, fixed in ReCADBench-gt). Re-validated: spec examples, 10 conformance IRs, 3 backend.yaml (strict), pilot gt_plan/meta/key_dims, data task.yaml. No contract files exist yet in -cad-skills / -strategies.
 - 2026-11-06 — H1 fixer (review of PR #9): the FreeCAD pin was mis-described as "the one reproducible 26.3": conda-forge `freecad=2026.09.16` is upstream tag `weekly-2026.09.16` (a4ce44d33), a development snapshot older than 26.3rc1 (2026-10-08) / rc2 (2026-10-18); stable is 1.1.4. Recorded honestly in backend.yaml (`version: 26.3.0-dev`), install.md, READMEs, CONFORMANCE.md; pin kept, re-pin is an open question below. `mcp_tools.py`: a set but nonexistent `RECAD_*_MCP` / `RECAD_SOLIDCRAFT_CLI` / `RECAD_FREECAD_CMD|BRIDGE` now raises `MisconfiguredError` and the host-only live test fails instead of skipping; new check rule 5 (a `mutating` tool the server annotates `readOnlyHint=true`); synthetic tests for rule 4 (`cad_prefixes.all`) and rule 5, each failing on the old code / killing the rule-4 mutation. Reruns on windows: ruff clean, pytest 263 passed (venv, all three backend envs set), live MCP tools/list 3/3 match snapshots, freecad adapter tests 43 passed, conformance 30/30 identical, check_public OK.
@@ -35,6 +61,27 @@ Update at the end of every session.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From H5 (P7 evaluator)
+- **wrong_dim PASSes** on all three pilots and on the synthetic parts: one key dim off of 8-10 keeps
+  `key_dims_ok` >= 80%, which the 03_SCORING PASS rule accepts. The S3 and total ordering is as expected. The tests
+  assert the rule (PASS iff >= 80%) rather than "only good passes". Should PASS require all key dims (or all
+  `editable`/critical dims)? That would change the scoring rubric (P11 / threshold ADR).
+- **Key-dim tolerance limit:** |err| <= tol counts as within, so a 9.98 vs 10.00 error (exactly 0.02, class B) passes.
+  The golden wrong_dim uses 1.5 x tol (0.03). Confirm the inclusive reading.
+- **No pilot key dim has `standard: true`.** The 4 standard-value points follow the key-dim fraction, so the
+  snap_everything penalty comes only from key-dim credit. Mark the standard dims during GT authoring.
+- **HS04 floor dominates the bands:** 1.5 x 0.346 = 0.519 mm is wider than the class B wide band (0.30), so tight = wide
+  there, and the same holds for DR02 (0.302). Calibrate `k` in P11.
+- **Scale gate uses the GT, not the scan:** sorted principal extents vs gt.step (raw scans carry stray patches).
+  03_SCORING says "STL bbox". Confirm.
+- **Golden edits on DR02:** the sphere / partial-cylinder / torus faces (dome_r, plate_t, arm_end_r, web_r) cannot be
+  moved by the boolean face-offset tool, so snap_everything snaps only 2 dims there (still FAIL at 0.75). The HS01 faceted
+  candidate loses its solid in the STEP round trip (gate fails on solids/closed and faceted together).
+- **Run dir contract** (`out/output.step`, `out/features.json`, `plan/re_plan.vN.json`, `out/s5/edits.json`,
+  `efficiency.json`) is defined in `evaluator/recadbench_eval/README.md`. P10 `finish` must produce it.
+- **CI time:** the evaluator + spec tests take about 2 min on the desktop (B-rep booleans plus 20k-sample scoring).
+  Mark them slow if CI grows.
 
 ### From H1 (P3 on the desktop)
 - **FreeCAD pin is a pre-RC development build** (main session to decide): conda-forge `freecad=2026.09.16` = upstream `weekly-2026.09.16` (git a4ce44d33, reports 26.3.0 dev), three weeks older than 26.3rc1; not a release. Options: keep it (same build on linux-64 + win-64, both conformance runs), re-pin to 26.3rc2, to stable 1.1.4 (2026-09-28; only 1.1.1 was tested, 10/10), or to 26.3 final once released. Any re-pin: rerun conformance + `mcp_tools.py refresh` on both hosts. ADR 0003 still says "FreeCAD 26.3" for the same build (historical wording, not edited).
