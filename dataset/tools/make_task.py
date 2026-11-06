@@ -114,7 +114,7 @@ def make_part(gt_part: Path, data_root: Path, budgets: dict) -> dict:
         digest = sha256(src)
         if digest != meta["scan"]["sha256"]:
             raise SystemExit(
-                f"{src}: sha256 {digest[:12]}… does not match meta.yaml — re-run register_gt.py"
+                f"{src}: sha256 {digest[:12]}... does not match meta.yaml - re-run register_gt.py"
             )
         shutil.copyfile(src, target)
         kind = "scan"
@@ -122,7 +122,9 @@ def make_part(gt_part: Path, data_root: Path, budgets: dict) -> dict:
     task = build_task(meta, kind, _mesh_facts(target) if kind == "scan" else {}, budgets)
     _validate(task, "task")
     (out / "task.yaml").write_text(
-        yaml.safe_dump(task, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        yaml.safe_dump(task, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+        newline="\n",  # LF on every OS: MANIFEST.json hashes these bytes
     )
     return {"part_id": pid, "split": meta["split"], "input_kind": kind}
 
@@ -139,7 +141,7 @@ def write_manifest_and_splits(data_root: Path, splits: dict[str, str]) -> None:
     current.update(splits)
     for name in ("dev", "test"):
         ids = sorted(pid for pid, s in current.items() if s == name)
-        (sp / f"{name}.txt").write_text("".join(f"{i}\n" for i in ids))
+        (sp / f"{name}.txt").write_text("".join(f"{i}\n" for i in ids), newline="\n")
     files = {}
     for f in sorted((data_root / "parts").rglob("*")):
         if f.is_file():
@@ -150,6 +152,7 @@ def write_manifest_and_splits(data_root: Path, splits: dict[str, str]) -> None:
     (data_root / "MANIFEST.json").write_text(
         json.dumps({"spec_version": SPEC_VERSION, "files": files}, indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -172,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     write_manifest_and_splits(data_root, {d["part_id"]: d["split"] for d in done})
     for d in done:
         print(
-            f"{d['part_id']}: {d['input_kind']} → {data_root / 'parts' / d['part_id']} "
+            f"{d['part_id']}: {d['input_kind']} -> {data_root / 'parts' / d['part_id']} "
             f"({d['split']})"
         )
     return 0

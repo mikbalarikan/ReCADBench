@@ -131,6 +131,11 @@ def test_make_task_packages_scan_only(registered: Path, tmp_path: Path) -> None:
     assert (data / "splits" / "test.txt").read_text() == ""
     manifest = json.loads((data / "MANIFEST.json").read_text())
     assert set(manifest["files"]) == {"parts/p_test01/input.stl", "parts/p_test01/task.yaml"}
+    # LF on every OS: MANIFEST.json hashes these bytes; git autocrlf must not change them
+    for f in (out / "task.yaml", data / "MANIFEST.json", data / "splits" / "dev.txt"):
+        assert b"\r" not in f.read_bytes(), f
+    for f in (gt_part / "meta.yaml", gt_part / "registration_report.json"):
+        assert b"\r" not in f.read_bytes(), f
 
 
 def test_make_task_refuses_tampered_scan(registered: Path, tmp_path: Path) -> None:
@@ -160,3 +165,17 @@ def test_splits_merge_with_existing(registered: Path, tmp_path: Path) -> None:
     make_task.main(["--gt-root", str(gt_part.parent), "--data-root", str(data)])
     assert (data / "splits" / "dev.txt").read_text() == "p_old\np_test01\n"
     shutil.rmtree(data)
+
+
+def test_runtime_messages_are_ascii() -> None:
+    """print()/SystemExit text must survive a cp1252 Windows console (docstrings may be UTF-8)."""
+    import ast
+
+    for tool in ("make_task.py", "register_gt.py"):
+        tree = ast.parse((Path(make_task.__file__).parent / tool).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            name = getattr(node.func, "id", None) if isinstance(node, ast.Call) else None
+            if name in ("print", "SystemExit"):
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                        assert sub.value.isascii(), f"{tool}:{sub.lineno}: {sub.value!r}"
