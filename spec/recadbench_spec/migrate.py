@@ -15,14 +15,22 @@ run pinned and is left untouched.
     A pattern without ``angle_deg``, or with ``angle_deg: 360``, is a full circle under every
     reading except ``pitch`` (where 360 would stack all instances) and needs no policy.
     The result is written in the 0.3.0 form: a full circle becomes ``angle_deg: 360`` (so a
-    ``{"ref"}`` count stays editable), any other pattern becomes ``pitch_deg``.
-  * Everything else (sketch numbers, typed params, features.json keys, backend.yaml
-    ``denied_tools``) only *widens* what is allowed, so valid 0.2.0 content stays valid.
+    ``{"ref"}`` count stays editable), any other pattern becomes ``pitch_deg``. A ``{"ref"}``
+    ``angle_deg`` under ``pitch`` stays a ``{"ref"}`` (``pitch_deg: {"ref": same}``); where the
+    rewrite cannot keep the binding (full circle, ``span``) a note names the dropped parameter.
+  * Typed taxonomy params *narrow* some values that 0.2.0 accepted (any number / list / string
+    per key). The mechanical case is migrated: a scalar where the type is ``number_list``
+    (e.g. ``primitive.size: 5``) becomes a one-element list. Any other value the 0.3.0 types
+    reject (e.g. ``hole.kind: tapped``, a ``{"ref"}`` inside ``hole.positions``) raises
+    `MigrationError` naming the param, so it is fixed by hand instead of failing later.
+  * Everything else (sketch numbers, features.json keys, backend.yaml ``denied_tools``) only
+    *widens* what is allowed.
 """
 
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -77,6 +85,7 @@ def migrate_document(
     notes: list[str] = []
     if schema == "re_plan_ir":
         notes += _ir_patterns(out, circular_angle)
+        notes += _ir_typed_params(out)
     out["spec_version"] = SPEC_VERSION
     notes.insert(0, f"spec_version {version} -> {SPEC_VERSION}")
     return Migration(out, version, SPEC_VERSION, notes)
@@ -109,6 +118,7 @@ def _ir_patterns(doc: dict, policy: CircularAngle | None) -> list[str]:
             )
         if policy == "sweep":
             continue
+        ref = p["angle_deg"].get("ref") if isinstance(p["angle_deg"], dict) else None
         if policy == "pitch":
             step = angle
         else:  # span: first -> last; 360 means a full circle
@@ -125,11 +135,58 @@ def _ir_patterns(doc: dict, policy: CircularAngle | None) -> list[str]:
                 raise MigrationError(
                     f"{where}: {n} instances at {step:g} deg overlap (more than a full turn)"
                 )
-            new = {"pitch_deg": _clean(step)}
-            text = f"angle_deg {angle:g} ({policy}) -> pitch_deg {new['pitch_deg']:g}"
+            if ref is not None and policy == "pitch":
+                new = {"pitch_deg": {"ref": ref}}
+                text = f"angle_deg {{ref: {ref}}} = {angle:g} (pitch) -> pitch_deg {{ref: {ref}}}"
+                ref = None  # binding kept
+            else:
+                new = {"pitch_deg": _clean(step)}
+                text = f"angle_deg {angle:g} ({policy}) -> pitch_deg {new['pitch_deg']:g}"
+        if ref is not None:
+            text += f"; binding to parameter {ref!r} dropped (re-bind it by hand if needed)"
         f["params"] = {k: v for k, v in p.items() if k != "angle_deg"}
         f["params"].update(new)
         notes.append(f"{where}: {text}")
+    return notes
+
+
+def _ir_typed_params(doc: dict) -> list[str]:
+    """Wrap scalar ``number_list`` values; raise on any other value the 0.3.0 types reject."""
+    from .taxonomy import load_taxonomy
+    from .validate import _validator  # late import: validate imports this module
+
+    tax = load_taxonomy()
+    notes: list[str] = []
+    for i, f in enumerate(doc.get("features") or []):
+        t, params = f.get("type"), f.get("params")
+        if t not in tax.known_types or not isinstance(params, dict):
+            continue
+        for name, value in params.items():
+            if name not in tax.allowed_params(t):
+                continue
+            scalar = isinstance(value, (int, float)) and not isinstance(value, bool)
+            if tax.param_type(t, name) == "number_list" and (
+                scalar or (isinstance(value, dict) and set(value) == {"ref"})
+            ):
+                params[name] = [value]
+                notes.append(
+                    f"features/{i} ({f.get('id')}): {name} {json.dumps(value)} -> "
+                    f"[{json.dumps(value)}] (0.3.0 type number_list)"
+                )
+    bad = sorted(
+        {
+            f"/{'/'.join(map(str, e.absolute_path))}: {e.message}"
+            for e in _validator("re_plan_ir").iter_errors(doc)
+            if len(e.absolute_path) >= 4
+            and list(e.absolute_path)[0] == "features"
+            and list(e.absolute_path)[2] == "params"
+        }
+    )
+    if bad:
+        raise MigrationError(
+            "0.2.0 param values that the 0.3.0 typed taxonomy params reject (fix by hand): "
+            + "; ".join(bad)
+        )
     return notes
 
 

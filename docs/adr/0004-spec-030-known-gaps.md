@@ -106,6 +106,12 @@ each `backend.yaml`): build123d `execute_file` and FreeCAD `run_macro` bodies â€
 `validate_document(..., migrate=True)`; CLI `recadbench-spec migrate [--write | -o]` and
 `validate --migrate`). It bumps `spec_version` and rewrites circular patterns; an `angle_deg`
 other than 360 is ambiguous in 0.2.0 and **requires** `--circular-angle pitch|span|sweep`.
+A `{"ref"}` `angle_deg` stays bound under `pitch` (`pitch_deg: {"ref"}`); full-circle and
+`span` rewrites cannot keep it and say so in a migration note. Typed params (section 2)
+*narrow* some values 0.2.0 accepted: a scalar where the type is `number_list` (e.g.
+`primitive.size: 5`) is wrapped into a list; any other rejected value (e.g. `hole.kind: tapped`,
+a `{"ref"}` in `hole.positions`) makes the migration fail with an error naming the param, to be
+fixed by hand. No contract file in the repos was affected.
 `run_manifest.spec_version` is a pin record and is never rewritten. Without `--migrate` a 0.2.0
 document fails with a hint naming the command.
 

@@ -274,6 +274,49 @@ def test_migrate_policies() -> None:
         migrate_document(_v020(), "re_plan_ir", circular_angle="degrees")
 
 
+def test_migrate_keeps_ref_bound_pitch_and_notes_dropped_bindings() -> None:
+    def ref_pitch(d):
+        d["parameters"].append({"name": "hole_pitch", "value": 30})
+        _circ(d)["params"].update(count=3, angle_deg={"ref": "hole_pitch"})
+
+    m = migrate_document(_v020(ref_pitch), "re_plan_ir", circular_angle="pitch")
+    p = _circ(m.document)["params"]
+    assert p["pitch_deg"] == {"ref": "hole_pitch"} and "angle_deg" not in p
+    r = validate_document(m.document, "re_plan_ir")
+    assert r.ok and not any("hole_pitch" in w for w in _msgs(r, "warning")), _msgs(r)
+
+    def ref_span(d):
+        d["parameters"].append({"name": "arc", "value": 180})
+        _circ(d)["params"].update(count=3, angle_deg={"ref": "arc"})
+
+    m = migrate_document(_v020(ref_span), "re_plan_ir", circular_angle="span")
+    assert _circ(m.document)["params"]["pitch_deg"] == 90
+    assert any("'arc' dropped" in n for n in m.notes), m.notes
+
+
+def _with_feature(feat):
+    def mutate(d):
+        d["features"].append(feat)
+
+    return mutate
+
+
+def test_migrate_wraps_scalar_number_list_and_rejects_narrowed_params() -> None:
+    sphere = {"id": "F90", "type": "primitive", "operation": "new",
+              "params": {"shape": "sphere", "size": 5, "center": [0, 0, 0]}}
+    m = migrate_document(_v020(_with_feature(sphere)), "re_plan_ir")
+    assert m.document["features"][-1]["params"]["size"] == [5]
+    assert any("size 5 -> [5]" in n for n in m.notes), m.notes
+    assert validate_document(m.document, "re_plan_ir").ok
+    tapped = {"id": "F91", "type": "hole", "operation": "cut",
+              "params": {"diameter": 3, "through": True, "kind": "tapped",
+                         "positions": [[2, 2, 5]]}}
+    with pytest.raises(MigrationError, match=r"typed taxonomy params.*kind"):
+        migrate_document(_v020(_with_feature(tapped)), "re_plan_ir")
+    r = validate_document(_v020(_with_feature(tapped)), "re_plan_ir", migrate=True)
+    assert not r.ok and r.errors[0].layer == "migration", _msgs(r)
+
+
 def test_migrate_task_and_version_free_schemas() -> None:
     old = dict(VALID_TASK, spec_version="0.2.0")
     m = migrate_document(old, "task")
