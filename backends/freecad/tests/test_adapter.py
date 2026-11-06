@@ -21,7 +21,14 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.extend(p for p in (os.path.join(sys.prefix, "lib"),) if os.path.isdir(p))
+# Same search order as adapter._bootstrap_freecad (conda Linux/macOS lib/, conda Windows
+# Library\bin, FreeCAD bundle bin/ next to python.exe), so the suite also runs on Windows.
+_EXE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+sys.path.extend(
+    p for p in (os.environ.get("FREECAD_LIB"), os.path.join(sys.prefix, "lib"),
+                os.path.join(sys.prefix, "Library", "bin"), os.path.join(sys.prefix, "bin"),
+                _EXE_DIR, os.path.join(_EXE_DIR, "..", "lib"))
+    if p and os.path.isdir(p) and p not in sys.path)
 pytest.importorskip("FreeCAD", reason="run with FreeCAD's Python (see module docstring)")
 ADAPTER = ROOT / "adapter" / "adapter.py"
 CASES_DIR = ROOT.parent / "conformance" / "ir_cases"
