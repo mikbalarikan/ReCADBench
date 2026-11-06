@@ -230,6 +230,25 @@ def _the_body(doc):
     return bodies[0]
 
 
+def _live_bodies(doc) -> set[str] | None:
+    """The result body plus every body it consumes through Booleans (transitively)."""
+    try:
+        root = _the_body(doc)
+    except ValueError:
+        return None
+    live: set[str] = set()
+    todo = [root]
+    while todo:
+        b = todo.pop()
+        if b.Name in live:
+            continue
+        live.add(b.Name)
+        for o in b.Group:
+            if o.TypeId == "PartDesign::Boolean" and not getattr(o, "Suppressed", False):
+                todo.extend(t for t in (o.Group or []) if t.TypeId == "PartDesign::Body")
+    return live
+
+
 BOOL_KIND = {"Cut": "subtract", "Fuse": "union", "Common": "intersect"}
 
 
@@ -349,6 +368,8 @@ def extract_doc(doc, native: str) -> dict:
         if o.TypeId == MULTI:
             sub_transforms.update(t.Name for t in o.Transformations)
 
+    live = _live_bodies(doc)  # None: no single result body (export fails anyway)
+    not_in_final: list[str] = []
     body_n: dict[str, int] = {}  # counted features per body (before boolean folding)
     booleans: list[tuple[dict, str, int, list[str]]] = []  # (feature, kind, n_before, tools)
     for body in _bodies(doc):
@@ -358,8 +379,24 @@ def extract_doc(doc, native: str) -> dict:
             in_body.add(body.Origin.Name)
             in_body.update(f.Name for f in body.Origin.OriginFeatures)
         group = list(body.Group)
+        if live is not None and body.Name not in live:
+            # scratch body that does not reach the exported solid: informational, never counted
+            in_body.update(o.Name for o in group)
+            not_in_final.extend(f"{body.Name}/{o.Name}" for o in group
+                                if PD_MAP.get(o.TypeId) in COUNTED or o.TypeId == MULTI)
+            for o in group:  # dumb geometry is reported wherever it sits (gate fail)
+                if o.TypeId not in PD_MAP and o.TypeId not in IGNORED and o.TypeId != MULTI:
+                    why = UNMAPPED_PD.get(o.TypeId, "not a native parametric PartDesign feature")
+                    unmapped.append(f"{body.Name}/{o.Name} ({o.TypeId}): {why}")
+            if body.BaseFeature is not None:
+                unmapped.append(f"{body.Name}.BaseFeature={body.BaseFeature.Name} "
+                                f"({body.BaseFeature.TypeId}): dumb solid as body base")
+            continue
         tip = body.Tip
-        tip_idx = group.index(tip) if tip in group else len(group) - 1
+        if tip is None:
+            tip_idx = -1  # no Tip: nothing in this body is part of its shape
+        else:
+            tip_idx = group.index(tip) if tip in group else len(group) - 1
         for idx, o in enumerate(group):
             in_body.add(o.Name)
             t = o.TypeId
@@ -450,6 +487,8 @@ def extract_doc(doc, native: str) -> dict:
         "native_sha256": _sha256(native),
         "parameters": _parameters(doc),
     }
+    if not_in_final:
+        doc_out["not_in_final_part"] = not_in_final
     try:
         doc_out["face_count"] = len(_body_shape(_the_body(doc)).Faces)
     except ValueError as e:
@@ -494,7 +533,7 @@ def cmd_extract(a) -> int:
     out = extract_doc(doc, a.native)
     errs = _errors(doc)
     Path(a.out).resolve().parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps(out, indent=2) + "\n")
+    Path(a.out).write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8", newline="\n")
     ok = not errs
     res = {"ok": ok, "count": out["count"], "unmapped": len(out["unmapped"]),
            "features": [f["taxonomy_type"] for f in out["features"] if f["counted"]],
@@ -556,7 +595,8 @@ def cmd_replay(a) -> int:
     errs = _errors(doc)
     step = _write_step(_body_shape(_the_body(doc)), str(out_dir / "output.step"))
     feats = extract_doc(doc, str(native))
-    (out_dir / "features.json").write_text(json.dumps(feats, indent=2) + "\n")
+    (out_dir / "features.json").write_text(json.dumps(feats, indent=2) + "\n",
+                                            encoding="utf-8", newline="\n")
     ok = step["ok"] and not errs and not feats["unmapped"]
     res = {"ok": ok, "volume_mm3": step["volume_mm3"], "faces": step["faces"],
            "count": feats["count"], "solids": step["solids"], "out_dir": str(out_dir)}
