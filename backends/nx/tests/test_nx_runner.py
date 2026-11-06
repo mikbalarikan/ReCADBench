@@ -275,7 +275,7 @@ def test_adapter_replay_extract_set_param(tmp_path):
     assert (out / "native.prt").read_bytes() == before  # the input is never written
 
 
-BOOL3 = '''
+BOOL3 = """
 import _nxr as X
 
 part = X.work()
@@ -296,7 +296,7 @@ box(15, 4, 10, 15, X.BOOL.Unite, bb)
 xx = box(30, 20, 0, 10)
 X.unite(part, a.GetBodies()[0], [bb])
 X.unite(part, a.GetBodies()[0], [xx.GetBodies()[0]])
-'''
+"""
 
 
 @needs_nx

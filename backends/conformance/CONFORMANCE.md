@@ -50,6 +50,8 @@ build123d` (adapter / dispatcher in CPython 3.13, build123d 0.13.0 for the STEP 
 are serialised by the runner's host lock (`max_parallel: 1`): 30 NX processes, about 15 min wall
 time. **Result: PASS.** nx 10/10, build123d 10/10 (same run), cross-backend counts and types
 identical for every case.
+Re-run after the H4 review fixes (boolean operand closure, facet bodies, user expressions): same
+result, nx 10/10 and build123d 10/10, counts and types identical.
 
 | Case | Expected n | nx vol err / n / set-param | Faces = expected | Types in IR order |
 |---|---|---|---|---|

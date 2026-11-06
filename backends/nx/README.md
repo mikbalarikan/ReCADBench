@@ -32,7 +32,8 @@ recadbench nx-run cad/step_01.py     # [--timeout 120] [--part cad/part.prt]
   **saved only when** the journal raised nothing, kept the same work part and no feature reports an
   error. A failed or timed-out run leaves `part.prt` as it was (transaction per run).
 - `cad/last_run.json`: `ok, error, traceback, saved, created, features[] (name, type,
-  taxonomy_type, counted), count, unmapped[], parameters[], bodies, sheets, volume, faces,
+  taxonomy_type, counted), count, unmapped[], parameters[] (expressions with `IsUserSpecified`, or
+  a name not of NX's own form), bodies, sheets, facet_bodies, volume, faces,
   feature_errors, timed_out, exit_code, elapsed_s, syslog_excerpt[], log`. Everything is measured
   by the wrapper from the NX session (the same counter as `recad nx extract`), never self-reported.
 - stdout/stderr of run_journal go to `cad/logs/<journal>.log`. stdout of `nx-run` is one JSON
@@ -74,12 +75,12 @@ sketch's own datum CSYS, `MASTER SNAPSHOT BODY`) are not history steps and are s
 | `Mirror` (Mirror Feature) | mirror | yes |
 | `Geomcopy` (Mirror / Pattern Geometry) layout Mirror / Translate / Rotate | mirror / pattern_linear / pattern_circular | yes |
 | `Block`, `Cylinder`, `Cone`, `Sphere` | primitive | yes |
-| `BooleanFeature` (UNITE / SUBTRACT / INTERSECT) | boolean | yes, unless it only merges a single-feature operand (subtract: tool has 1 counted feature; unite / intersect: body or tool has ≤ 1), then `counted: false` — same rule as build123d / FreeCAD. Operands from `Feature.GetParents()` (target first, measured) |
+| `BooleanFeature` (UNITE / SUBTRACT / INTERSECT) | boolean | yes, unless it only merges a single-feature operand (subtract: tool has 1 counted feature; unite / intersect: body or tool has ≤ 1), then `counted: false` — same rule as build123d / FreeCAD. Operands from `Feature.GetParents()` (target first, measured); each operand = the counted features in that parent's closure (an unrelated earlier body is not part of the target), folded booleans in tree order no longer count |
 | `SweepAlongGuide`, `Swept`, `Tube`, `VariationalSweep` / `ThroughCurves`, `ThroughCurveMesh` | sweep / loft | yes |
 | `SketchFeature`, associative curve features | sketch | no |
 | `DatumPlaneFeature`, `DatumCsys` / `DatumAxisFeature` / `PointFeature` | datum_plane / datum_axis / datum_point | no |
 | user-named expressions | `parameters[]` | — |
-| `Brep` (BREP / UNPARAMETERIZED_FEATURE: Remove Parameters, imported bodies), STEP-import rows (class `Feature` / `BodyFeature`, type = file name, `COMPOUND`), `ExtractFace` (EXTRACT_BODY), linked bodies, Move Object, synchronous edits, Trim / Split Body, other pattern layouts, assembly components, **any unknown class** | — | **unmapped ⇒ gate fail** |
+| `Brep` (BREP / UNPARAMETERIZED_FEATURE: Remove Parameters, imported bodies), STEP-import rows (class `Feature` / `BodyFeature`, type = file name, `COMPOUND`), `ExtractFace` (EXTRACT_BODY), linked bodies, Move Object, synchronous edits, Trim / Split Body, other pattern layouts, assembly components, facet bodies without an associated body (STL imported as a JT facet body: no feature row), **any unknown class** | — | **unmapped ⇒ gate fail** |
 
 - A counted feature that does not contribute to the single result solid (`Body.GetFeatures()`
   timestamps) is listed in `not_in_final_part` and not counted. Suppressed / rolled-back rows are
