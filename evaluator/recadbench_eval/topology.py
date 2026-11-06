@@ -1,7 +1,8 @@
 """S4 topology (10). 03_SCORING §3 S4.
 
 - Through-hole / handle count b1 match (4): b1 of the candidate solid (genus of its closed
-  boundary, from B-rep topology) equals ``meta.yaml: b1``. b0 = 1 and b2 = 0 (one shell) are gate checks.
+  boundary, from B-rep topology) equals ``meta.yaml: b1``. b0 = 1 and b2 = 0 (one shell) are
+  gate checks.
 - Face-type histogram similarity ``1 - TVD(pred, gt)`` over {plane, cylinder, cone, sphere,
   torus, bspline} by area (6). Any other free-form surface counts as bspline.
 """
