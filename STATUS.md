@@ -8,6 +8,7 @@ Update at the end of every session.
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
 | P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
 | P3 | Backends build123d / solidcraft / freecad + conformance suite | done (uncommitted, awaiting review/PR): 3 adapters, `recad` dispatcher, conformance 10/10 on all three, counts identical; FreeCAD MCP = freecad-robust-mcp 0.6.1 (ADR 0003) |
+| H3 | Spec 0.3.0 (ADR 0004): sketch refs, typed params, pattern_circular, features keys, denied_tools, 0.2.0 migration | done (PR open; tag `spec-v0.3.0` + downstream pins after merge) |
 | P4 | NX backend (runner, adapter, replays) | todo |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | todo |
@@ -16,6 +17,7 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — H3 / ADR 0004, recadbench-spec **0.3.0**: `{"ref"}` for every sketch number; taxonomy `params: {name: type}` (12 types + enums, `$defs/ptype_*`, compiled IR schema type-checks them, semantic id resolution by type); `pattern_circular.angle_deg` = total sweep (step = angle/count, 360 = full circle) + new `pitch_deg`, `recadbench_spec.circular_offsets`; features.schema `not_in_final_part` / `excluded` / `final_part` / `bodies`; backend.yaml `denied_tools` [{tool prefix, args_regex?, reason}] filled for build123d / freecad / solidcraft; `recadbench_spec.migrate` + `recadbench-spec migrate` / `validate --migrate` (0.2.0 circular angle needs pitch|span|sweep). build123d execute-ir on 0.3.0 (sketch refs drive set-param, new pattern semantics). `dataset/tools/check_gt_patterns.py` + host-only test: all 6 pilot patterns match gt.step after migration (it caught a wrong HS04 pad seed, fixed in ReCADBench-gt). Re-validated: spec examples, 10 conformance IRs, 3 backend.yaml (strict), pilot gt_plan/meta/key_dims, data task.yaml. No contract files exist yet in -cad-skills / -strategies.
 - 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
 - 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
 - 2026-11-06 — P3: L1 backends build123d (0.13.0 + build123d-mcp 0.3.91, reference, `execute-ir`), freecad (FreeCAD 26.3 + freecad-robust-mcp 0.6.1, ADR 0003), solidcraft (solidcraft-cli 0.30.1): `backend.yaml`, install.md, adapters (export / extract / set-param / replay), 10 replays each, review fixes (dumb-solid fillet/mirror → unmapped, dead ops not counted, Boolean tool bodies, C09/C10 solidcraft replays, usage errors → one JSON). `recad` dispatcher (`backends/recad_cli`, package recadbench-backends 0.1.0): subprocess per call with the backend interpreter, features.json validation, needs_measure STEP measuring, `recad backends`. `backends/conformance/run_conformance.py`: 30/30 case×backend pass, cross-backend counts identical (CONFORMANCE.md). CI now installs ./backends + build123d 0.13.0 and runs backends/tests (28) + backends/build123d/tests (64); full suite 223 passed. FreeCAD (41) and SolidCraft (40) adapter tests pass locally, not in CI.
@@ -32,13 +34,12 @@ Update at the end of every session.
 ## Open questions
 
 ### From P3 (backends)
-- **CAD MCPs expose RE analysis** (P10): build123d-mcp 0.3.91 has read-only `mesh_section`,
-  `mesh_holes`, `find_holes`, `recognise_features`, `compare` …; with `import_cad_file` an agent can
-  analyse the scan inside the backend (strategies must use retk only, identical across backends).
-  Importing is mutating and leaves `unmapped`, but import → analyse → reset leaves no trace. The
-  same holds for freecad `import_stl` / solidcraft `pointcloud.*`. `backend_manifest` has no deny
-  list (schema change ⇒ ADR); runner/gate_hook should deny import + mesh tools by name.
-- **docs/adr/README.md index** lists only 0001; add 0002 and 0003.
+- ~~CAD MCPs expose RE analysis~~ → ADR 0004 `backend.yaml: denied_tools`. **P10 gate_hook must
+  implement the matcher** (name prefix + `re.search(args_regex, json.dumps(args))`, see
+  `backends/tests/test_denied_tools.py`). Gaps: build123d `execute_file` and FreeCAD `run_macro`
+  bodies are invisible to the matcher (extract still flags imported geometry); the freecad list
+  was written from ADR 0003 / the adapter, re-check against freecad-robust-mcp `tools/list` in H1;
+  the solidcraft list was not checked against a live `tools/list` on this host (not installed).
 - **SolidCraft on Termux ARM64 is untested.** `termux` is not in solidcraft `hosts`; the test steps
   are in `backends/solidcraft/install.md` ("Termux test"). Run them on the phone before listing it.
 - **build123d on Termux stays on 0.10.0** (PoCAD route, install.md B) while the desktop/CI pin is
@@ -74,14 +75,20 @@ Update at the end of every session.
 - **recadbench-data / recadbench-gt READMEs** still describe tessellated inputs — update in P6.
 - **No frozen test split** until `print_scan` (OGUZ print + scan) parts exist.
 
+### From H3 (spec 0.3.0, ADR 0004)
+- **Tag + pins:** after the H3 PRs merge, the main session tags `spec-v0.3.0` from the desktop and bumps
+  the pins (checklist in the PR body). No downstream pyproject pins `spec-v0.2.0` today.
+- **Scanner scale never verified** against a reference artifact (gauge block / calibrated sphere) —
+  physical step, not done; affects every scan-rebuild GT floor.
+- **IR has no expressions** (`center_y = shaft_len / 2`), so a ref'd rect grows about its centre; C04
+  keeps the `sketch.constraints` binding. Hole `positions` (vec3) cannot be refs.
+- **Pilot sketch dims are not bound yet** (75 unused-parameter warnings over the 3 pilots): GT authoring
+  pass with the new sketch refs (needed for S5 on pilots).
+- **retk ↔ IR:** `detect_holes.hole_groups` (polar groups) must be mapped to `pattern_circular` with the
+  0.3.0 meaning (total sweep / pitch_deg) in the P9 strategies.
+
 ### From P2 (spec)
-- **Sketch dimensions can't be parameters.** IR sketch entities (`rect.width`, `circle.radius`, …) take plain
-  numbers; only feature `params` accept `{"ref": name}`. So a plate's width/height can't be named
-  parameters, which limits S5 (`set_param`) to non-sketch dims, and the "unused parameter" warning fires
-  for GT authors who declare them. Allow `{"ref"}` in sketch numbers? (schema change → ADR, spec 0.2.0)
-- **Param values are untyped.** The taxonomy lists param *names* per type but not their types, so
-  `radius: [1, 2, 3, 4]` or `count: "two"` pass. Add `params: {name: type}` to the taxonomy so the
-  compiled schema can type-check? (taxonomy change → ADR)
+- ~~Sketch dimensions can't be parameters~~ / ~~param values are untyped~~ → ADR 0004 (spec 0.3.0).
 - **Semantic rules are stricter than the schemas** in a few places (listed in `spec/README.md`), e.g.
   Track T requires `split: dev` (the schema only checks it when present), and refs must point to
   *earlier* features. Confirm these match intent.
