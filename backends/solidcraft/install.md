@@ -41,8 +41,27 @@ The release packages ship `solidcraft-cli` next to the app. Install v0.30.1 from
 | Linux x86_64 / aarch64 | `.AppImage`, `.deb`, `.rpm`, Arch `.pkg.tar.zst`, or `snap install solidcraft` |
 
 Use the files of the pinned tag, not `releases/latest`. Check with `solidcraft-cli --version`, which
-must print `solidcraft-cli 0.30.1`. The release route has not been run through conformance yet.
-Before a host enters Track T, run `pytest backends/solidcraft/tests` on it.
+must print `solidcraft-cli 0.30.1`. Before a host enters Track T, run
+`pytest backends/solidcraft/tests` on it.
+
+**Windows, verified 2026-11-06 (Windows 11 x64): portable zip, no installer.** Do not rely on an
+already installed `C:\Program Files\SolidCraft` without checking `--version` (the evaluator host
+had 0.19.0 there). Get the pinned assets with `gh` and check the published hash:
+
+```powershell
+gh release download v0.30.1 -R tangency-labs/solidcraft -D <tools>\solidcraft\_download `
+   -p solidcraft-0.30.1-windows-x64-portable.zip -p SHA256SUMS.txt
+(Get-FileHash <tools>\solidcraft\_download\solidcraft-0.30.1-windows-x64-portable.zip).Hash
+#   14392C9D96F21A6BCD606D565BD676703BE46C01FCCF8956DA2E8A89AB1F1D21 (= SHA256SUMS.txt)
+Expand-Archive <tools>\solidcraft\_download\solidcraft-0.30.1-windows-x64-portable.zip <tools>\solidcraft\0.30.1
+$env:RECAD_SOLIDCRAFT_CLI = "<tools>\solidcraft\0.30.1\solidcraft-0.30.1-windows-x64-portable\solidcraft-cli.exe"
+& $env:RECAD_SOLIDCRAFT_CLI --version     # solidcraft-cli 0.30.1
+```
+
+`solidcraft-cli.exe` from that zip has sha256
+`abc39aed92a18ea540bf12ea17552cd974f63313208a0ad1d4468062ae3a6a88`. With it, conformance is 10/10
+and `pytest backends/solidcraft/tests` passes; `mcp --headless` lists the same 21 tools as the
+Linux source build (`../solidcraft/mcp_tools.json`).
 
 ## C. MCP registration (agent side)
 

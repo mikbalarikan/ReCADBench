@@ -68,7 +68,7 @@ def load_cases(only: list[str] | None) -> list[dict[str, Any]]:
     for d in sorted(CASES_DIR.iterdir()):
         exp = d / "expected.json"
         if exp.is_file() and (not only or d.name in only):
-            cases.append(json.loads(exp.read_text()))
+            cases.append(json.loads(exp.read_text(encoding="utf-8")))
     return cases
 
 
@@ -93,7 +93,7 @@ def run_case(backend: str, case: dict[str, Any], work: Path) -> dict[str, Any]:
         fail(f"replay failed (exit {rc}): {res.get('error')}")
         return row
     feats_path = out_dir / "features.json"
-    feats = json.loads(feats_path.read_text()) if feats_path.is_file() else {}
+    feats = json.loads(feats_path.read_text(encoding="utf-8")) if feats_path.is_file() else {}
     types = [f.get("taxonomy_type") for f in feats.get("features", []) if f.get("counted", True)]
     row.update(volume_mm3=res.get("volume_mm3"), faces=res.get("faces"),
                count=feats.get("count"), types=types, unmapped=feats.get("unmapped", []),

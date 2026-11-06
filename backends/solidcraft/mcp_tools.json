@@ -1,0 +1,107 @@
+{
+  "backend": "solidcraft",
+  "pin": "solidcraft-cli 0.30.1",
+  "command": [
+    "solidcraft-cli.exe",
+    "mcp",
+    "--headless"
+  ],
+  "server": {
+    "name": "solidcraft",
+    "version": "0.30.1"
+  },
+  "tools": [
+    {
+      "name": "batch",
+      "read_only_hint": false
+    },
+    {
+      "name": "body_topology",
+      "read_only_hint": true
+    },
+    {
+      "name": "check_parameters",
+      "read_only_hint": false
+    },
+    {
+      "name": "compare_picture",
+      "read_only_hint": false
+    },
+    {
+      "name": "crash_reports",
+      "read_only_hint": true
+    },
+    {
+      "name": "describe_command",
+      "read_only_hint": true
+    },
+    {
+      "name": "execute",
+      "read_only_hint": false
+    },
+    {
+      "name": "export",
+      "read_only_hint": false
+    },
+    {
+      "name": "inspect_design",
+      "read_only_hint": true
+    },
+    {
+      "name": "list_commands",
+      "read_only_hint": true
+    },
+    {
+      "name": "measure",
+      "read_only_hint": true
+    },
+    {
+      "name": "new_design",
+      "read_only_hint": false
+    },
+    {
+      "name": "open",
+      "read_only_hint": false
+    },
+    {
+      "name": "pending",
+      "read_only_hint": true
+    },
+    {
+      "name": "redo",
+      "read_only_hint": false
+    },
+    {
+      "name": "running",
+      "read_only_hint": true
+    },
+    {
+      "name": "save",
+      "read_only_hint": false
+    },
+    {
+      "name": "screenshot",
+      "read_only_hint": false
+    },
+    {
+      "name": "set_parameter",
+      "read_only_hint": false
+    },
+    {
+      "name": "skill_reference",
+      "read_only_hint": true
+    },
+    {
+      "name": "undo",
+      "read_only_hint": false
+    }
+  ],
+  "not_mutating": {
+    "check_parameters": "sets parameter values, evaluates, then restores the checkpoint",
+    "compare_picture": "renders and compares an image file; the design is unchanged",
+    "export": "writes an export file only (inside --allow-path)",
+    "save": "writes the .sc design file only (inside --allow-path)",
+    "screenshot": "writes an image file only"
+  },
+  "conditional": {}
+}
