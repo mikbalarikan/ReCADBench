@@ -9,8 +9,10 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
+# runner / orchestrator tests import their helper modules (runner_helpers, orch_helpers) by name
+pythonpath = ["runner/tests", "orchestrator/tests"]
 # backends: dispatcher + build123d adapter run here; FreeCAD / SolidCraft adapter tests need their
 # own environments (backends/freecad/install.md, backends/solidcraft/install.md) and skip without.
 # backends/nx/tests: the NX host part skips without run_journal.exe (CI runs the pure part).
-testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "dataset/tests",
+testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "orchestrator/tests", "dataset/tests",
              "backends/tests", "backends/build123d/tests", "backends/nx/tests"]

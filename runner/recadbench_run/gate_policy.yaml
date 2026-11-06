@@ -1,0 +1,86 @@
+# Runner-level gate policy (P10). Backend facts (CAD prefixes, allowed_commands, denied_tools)
+# come from backends/<b>/backend.yaml (ADR 0004) and are NOT repeated here; this file only holds
+# what backend.yaml has no field for. Read by compose (copied into .recadbench/gate.json) and by
+# gate_hook.
+
+# Claude Code built-in tools an agent may use. Everything else that is not an MCP tool of the run
+# (retk subset, the L1 backend) is denied, including WebFetch / WebSearch (contamination) and
+# every shell tool except a backend allowed_commands match.
+builtin_allowed: [Read, Write, Edit, MultiEdit, Glob, Grep, LS, TodoWrite, Task, Agent, Skill,
+                  ToolSearch]
+# file tools and the arguments that hold a path (must resolve inside the run dir)
+file_tools:
+  Read: [file_path]
+  Write: [file_path]
+  Edit: [file_path]
+  MultiEdit: [file_path]
+  Glob: [path, pattern]
+  Grep: [path]
+  LS: [path]
+write_tools: [Write, Edit, MultiEdit]
+shell_tools: [Bash, PowerShell, BashOutput, KillShell, KillBash, Monitor]
+
+# Run-dir paths the agent may read but never write (relative, POSIX; a trailing / = folder).
+protected:
+  - input/
+  - lib/
+  - _shared/
+  - .claude/
+  - .recadbench/
+  - .mcp.json
+  - CLAUDE.md
+  - system_prompt.md
+  - run_manifest.json
+  - efficiency.json
+
+# Harness levels (04_STRATEGIES): the retk tools each level allows; a strategy's toolkit_tools is
+# intersected with this. Default level of compose: H3 (STATUS open question).
+harness_levels:
+  H0: [mesh_stats]
+  H1: [mesh_stats, self_deviation]
+  H2: [mesh_stats, self_deviation, render]
+  H3: [mesh_stats, slice, fit_primitives, detect_holes, snap_nominal, self_deviation, render]
+
+# Code-text checks applied to every piece of code that reaches the CAD program: MCP code arguments,
+# the body of a script an MCP tool executes (execute_file), NX journals, and every .py the code can
+# import from cad/ and lib/. Comments are removed first (nx_run.journal_source). Python re.search
+# on the source text (NOT on JSON): mesh / scan readers and scan paths. Best effort, like ADR 0004.
+scan_code_patterns:
+  - '\b(?:import|from)\s+(?:trimesh|open3d|pymeshlab|meshio|pyvista|vtk|stl|numpy_stl|pyntcloud|plyfile|laspy)\b'
+  - '\b(?:import_stl|import_threemf|import_ply|import_obj|Mesher|read_triangle_mesh|read_point_cloud)\b'
+  - '\b(?:RWStl|StlAPI|StlAPI_Reader|RWObj|RWPly|RWGltf|RWMesh|vtkSTLReader|vtkPLYReader|vtkOBJReader)\b'
+  - '\bmesh\.Mesh\.from_file\b|\btrimesh\.load\w*\b|\bo3d\.io\b'
+  - '(?i)\b(?:open|read\w*|load\w*|import\w*)\s*\(\s*[rbuf]*["''][^"''\n]*\.(?:stl|ply|obj|3mf|pcd)["'']'
+  - '(?<![\w.])input[/\\]'
+  - '(?i)(?<![\w.])input\.(?:stl|ply|obj|3mf)\b'
+  - '(?<![\w.])(?:__import__|importlib|exec|eval)\s*\('
+
+# Per backend: the native deliverable, which files are CAD source (their change = a CAD-side
+# change, plan revision rule), which tools execute a source file, and which tool's denied_tools
+# rule applies to a script body that only travels as a path.
+backends:
+  build123d:
+    native_file: cad/part.py
+    source_globs: ["*.py"]
+    source_tools:
+      mcp__build123d__execute_file: {path_arg: path}
+    code_args:
+      mcp__build123d__execute: code
+    body_as:
+      mcp__build123d__execute_file: {path_arg: path, as_tool: mcp__build123d__execute, code_arg: code}
+  nx:
+    native_file: cad/part.prt
+    source_globs: ["*.py"]
+    # kind cli: the allowed command is the source tool; its journal is argument 3
+    nx_run_flags: ["--timeout"]
+  freecad:
+    native_file: cad/part.FCStd
+    source_globs: ["*.py", "*.FCMacro"]
+    source_tools: {}
+    code_args:
+      mcp__freecad__execute_python: code
+  solidcraft:
+    native_file: cad/part.json
+    source_globs: ["*.json"]
+    source_tools: {}
+    code_args: {}

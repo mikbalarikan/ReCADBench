@@ -12,11 +12,12 @@ Update at the end of every session.
 | P4 | NX backend (runner, adapter, replays) | done (H4, PR h4-nx-backend): `recadbench nx-run`, `recad nx` adapter, 10 replays, conformance 10/10 on NX 2206 (Windows), counts identical to build123d |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | done (H5, PR h5-evaluator): recadbench-eval 0.1.0, synthetic golden tests in CI, R385 pilot goldens on the evaluator host (9/9) |
-| P10 | Runner, compose, gate_hook, orchestrator | todo |
+| P10 | Runner, compose, gate_hook, orchestrator | done (H8, PR h8-runner): `recadbench` CLI (compose / seed-plan / agent / finish / run / gate / nx-run), gate (backend.yaml denied_tools, journal-source + script-body matching, plan + N+1 rule), agent backends claude_agent_sdk / litellm_loop / replay, SQLite queue + HTTP front + pull worker, expand; dry run oracle x build123d@v1 x r385_hs01 -> result.json (PASS, 81.7/95, plan 100) |
 | P11 | Pilot + calibration, threshold ADR, spec-v1.0.0 | todo |
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 - H8 / P10 (PR h8-runner): `recadbench-run` 0.1.0 owns the `recadbench` CLI (compose, seed-plan, agent, finish, run, render-prompt, gate, nx-run forwarded to backends/nx/runner; backends no longer declares the script). compose per D6 (git-ref pinned content via `git archive`, strategy SKILL/playbook/stages/shared per the strategies compose contract, skills/agents/examples/lib/_shared, `.mcp.json` with retk = toolkit_tools x harness level and no retk for oracle, settings.json hook, schema-valid run_manifest, CLAUDE.md, system_prompt.md, GT leak check). Track T seed = gt_plan mapped with inv(T_scan_to_gt) (`frames.py`, taxonomy-type driven; world-axis selectors -> `any` + note), made on the evaluator host and shipped in the job payload. Gate: shell denied except allowed_commands, denied_tools read from the run's backend.yaml (cli: journal source via nx_run.journal_source over all run-dir .py; build123d execute_file bodies + cad/lib siblings matched as `execute`), runner scan-code patterns (mesh libs, OCP/VTK readers, input/), paths inside the run dir, protected files, plan before CAD, N+1 after a CAD-source change, no background tasks. Agents: claude_agent_sdk (in-process PreToolUse gate, project settings only, strict MCP, budgets), litellm_loop (gate before every dispatch), replay (scripted, zero cost). finish: recad extract + export in a clean process, hashes + native_sha256, optional score / enqueue. Orchestrator package `recadbench_orch`: SQLite queue (caps, per-host NX limit 1, leases, retries) + stdlib HTTP front + RemoteQueue, pull worker (Termux-safe imports, host lock, artifact upload, score jobs), expand (D4 rules, `--count`). Tests: runner + orchestrator 115 passed / 4 skipped (CI mode), 119 passed (host mode); full suite CI mode 615 passed, 19 skipped. Dry run oracle x build123d@v1 (846414c) x r385_hs01 via the replay agent: gate ok, PASS, total 81.70 / 95 (S1 40, S2 12.5, S3 20, S4 9.20), plan 100, p_tight 0.996. Claude smoke run (claude-sonnet-5-5, 40 turns / 20 min caps): 7 turns, $0.257, 45 s, gate fail (its build123d-modeler subagent ran in the background and the session ended first) -> fixed (see open questions), not re-run.
 - 2026-11-06 - H5 fixer (review of #12): merged main (H4 #10; STATUS conflict resolved, both logs kept). Fixes, each with a regression test in `evaluator/tests/test_regressions.py` that fails on the old code (10 of 14; the other 4 pin 03_SCORING rules that 5 reviewer mutations used to survive: param-coverage halving, face-ratio halving, broken coaxial relation, standard-credit fallback, S1 in the PASS conjunction - all 5 mutants now killed): (1) gate b2: the single solid must have exactly one shell (internal voids / 0.15 mm hollow skin / 12 spherical voids on the pilots were PASS, now gate fail); (2) scale gate: vertex-PCA extents (tilted by tessellation density; zeroed a part with one small hole missing) replaced by the rotation-invariant volume scale `cbrt(V_pred/V_gt)` within 20% (also the volume sanity check; inch parts still fail "units?") plus a per-axis bbox check after alignment in the GT frame; (3) features.json read with utf-8-sig (PowerShell BOM), unreadable -> gate fail instead of a crash, validated against the spec `features` schema (forged `count` = gate fail, was PASS 82.5), and S2 N_pred = rows with `counted: true`; `face_count` vs the STEP is recorded in details only (adapters count native faces); (4) key-dim / relation faces must lie within max(1 mm, 3 x wide band_eff) of the GT near point (a missing hole is no longer measured on its twin 14 mm away); (5) S1 masks only GT samples as 03_SCORING says; every pred->GT sample is scored (material over unobserved GT was hidden: hs04 thicken 1.0 mm now S1 34.46, p 0.945). Not changed: PASS ignores topology (hs04 with two lug holes plugged under unobserved bore middles still PASS, S4 b1 4 vs 6) - rubric gap for P11; native_sha256 cross-check needs the P10 manifest. Rerun: ruff OK, check_public OK, pytest 503 passed / 15 skipped (no GT), evaluator suite with RECADBENCH_GT_DIR 46 passed; R385 pilot golden table below unchanged (same 18 rows, all gates/scores/PASS identical).
 - 2026-11-06 — H5 / P7: **recadbench-eval 0.1.0** (`evaluator/`). Gate (load, 1 solid, valid, closed, faceted, volume-scale check vs GT (fixer: was principal extents), b2 one-shell check, features.json present + `unmapped` empty; aligned freeform cover-up for tier 1-2); alignment = `T_scan_to_gt` + trimmed point-to-plane ICP (fixed seed), 24-PCA fallback only when the 1 mm two-way F1 < 0.8; S1 two-way 50k samples, exact distances, observable region by nearest-neighbour lookup in `observability_mask.npz`, `band_eff = max(class band, k * floor p95)` (`k` = 1.5 in `EvalConfig`), inferred region reported; S2 from features.json (face-ratio + parametric-presence halvings, r > 3 caps the total at 40); S3 intrinsic key dims (nearest same-type face, axis within 2 deg), standard credit, coaxial / symmetry relations; S4 b1 (B-rep Euler characteristic) + face-type TVD; S5 behind `--s5` (reads `out/s5/edits.json`); plan score (Hungarian F1, key dims, datum rotated by T, count ratio, order); result.json validated against the spec schema, byte-identical on rerun; markdown/CSV report; CLI `recadbench-eval score|plan-score|report|golden`. GT only via `RECADBENCH_GT_DIR` (`gtstore.py`); no backend imports (tested). Golden tests: CI = 2 synthetic parts generated in-test (clean + scan rules with known T, floor, mask) x 6 candidates + unit tests (23 tests); evaluator host = 3 R385 pilots x 6 candidates (9 tests, ~2 min), results:
 
@@ -66,9 +67,49 @@ Update at the end of every session.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From H8 (P10 runner)
+- **Selectors with a world axis cannot be mapped** into the scanner frame (`BODY:plane:+Z:max`
+  in hs01, `HUB:plane:-Z:min` in dr02): the seed keeps feature + face type, direction/extremum
+  become `any` and `evidence.note` carries the mapped vector. A datum-relative selector form
+  (e.g. `<F>:plane:D1+:max`) needs an ADR + spec bump (H7 raised the same for strategies).
+- **nx-v1 has no `_shared/`** (tagged in H4, before H6 created it): compose keeps the pin and
+  records `compose.warnings` in run_manifest.json. Re-tag (nx-v2 = nx-v1 + `_shared`) before NX
+  Track T runs, or accept the gap.
+- **run_manifest `agent_backend` enum** has no `replay`: replay runs omit the key and record
+  `agent_driver: replay` (extra keys are allowed). Add `replay` in the next spec bump?
+- **Harness level default**: compose defaults to `H3` (strategy's own `toolkit_tools`); 04_STRATEGIES
+  calls H1 "default", which would strip B/D to mesh_stats + self_deviation. Decide (P11).
+- **Revision rule semantics** (implemented, confirm): only calls that execute the CAD source
+  (`execute_file`, `nx-run`) record (N, sha256 of `cad/*.py`); a changed source then needs N+1,
+  even after a failed first execution (matches the oracle playbook's "re-execute after <CAD
+  error>" copy). `execute(code)` probes need only a valid plan. FreeCAD / SolidCraft keep the
+  model in the session (no `cad/` source), so the N+1 rule never triggers there yet.
+- **NX `--timeout`**: the gate accepts `recadbench nx-run cad/*.py --timeout N` (the nx skill
+  teaches it) although `allowed_commands` lists only the bare form; `--part` is refused.
+- **Residual scan access** stays best-effort: code that builds module names / paths at runtime
+  is not caught by the regexes (ADR 0004). The input dir is not hidden from the CAD process
+  (build123d-mcp sandbox blocks `open`/imports by default; NX journals are plain Python).
+- **Claude Code subagents run in the background by default** (CLI 2.x): the H8 smoke run ended
+  while its modeler subagent was still working (no cad/part.py, gate fail, $0.26). Fixed after
+  the run, not re-run (one smoke run allowed): `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, the gate
+  denies `run_in_background`, the SDK loop waits for active tasks, the prompt says so. First P11
+  run must confirm.
+- **Token accounting**: `tokens_in` = input + cache-creation tokens (cache reads separately as
+  `cache_read_tokens`); budgets check live per-message counts, efficiency.json takes the CLI's
+  session totals. `max_tokens` therefore ignores cache reads. Confirm.
+- **GT exposure on the evaluator host**: agents run with the GT store on the same disk; the gate
+  denies any path outside the run dir and the agent env drops `RECADBENCH_GT_DIR`, but the Claude
+  CLI itself (not its tools) is not sandboxed. Run P11 agents on hosts without the GT clone where
+  possible.
+- **replay `ir_build123d`** fillets coarse GT edge sets (`BODY:edges:convex`) on the subset the
+  kernel accepts; on hs01 SHOULDER_IN_R (same selector as BASE_INNER_R) finds no edges. A
+  reference executor that resolves such sets is not part of v1.
+- ~~gate_hook for kind cli~~ / ~~recadbench CLI name~~ / ~~gt_plan frame~~ / ~~NX gate surface
+  (journal review)~~: answered by H8 (see the log).
 - ~~NX surface features~~ (H4 fixer 2): measured and kept unmapped with the reason "not countable in v1"; the cad-skills nx skills say so. Counting them needs a taxonomy type (e.g. a `thicken` / `sew` or surface type) = an ADR + spec bump. Other sheet tools (Ruled class `Ruled`/SKIN, Studio / Section / N-Sided Surface, Fill, Bridge, Offset Surface, Enlarge, Untrim, Delete Edge, Patch) are unknown classes -> unmapped too; Ruled is arguably a `loft` but was not mapped (not measured here).
 - ~~Mirror Body~~: measured `MirrorBody` / MIRROR, mapped to `mirror`.
-- **gate_hook for kind cli** (P10): the nx deny entry needs the journal SOURCE as `journal` in the matcher arguments (the command line only names the file), as `nx_run.journal_source(bytes)` gives it (comments removed); `recadbench nx-run` already enforces the list itself on every .py of the run dir and lib/, so gate_hook may rely on that or re-check. Journal code that builds names / paths at runtime or exec()s a non-.py file is not caught (best-effort, like the MCP code regexes); hiding `input/` from the NX process (P10) would close that. Compose could also re-copy lib/ from the skillset before each run.
+- ~~gate_hook for kind cli~~ (answered H8: the gate builds `{"command", "journal"}` with `nx_run.journal_source` over the journal and every .py of the run dir; nx-run re-checks) (P10): the nx deny entry needs the journal SOURCE as `journal` in the matcher arguments (the command line only names the file), as `nx_run.journal_source(bytes)` gives it (comments removed); `recadbench nx-run` already enforces the list itself on every .py of the run dir and lib/, so gate_hook may rely on that or re-check. Journal code that builds names / paths at runtime or exec()s a non-.py file is not caught (best-effort, like the MCP code regexes); hiding `input/` from the NX process (P10) would close that. Compose could also re-copy lib/ from the skillset before each run.
 
 ### From H5 (P7 evaluator)
 - **wrong_dim PASSes** on all three pilots and on the synthetic parts: one key dim off of 8-10 keeps
@@ -125,10 +166,10 @@ Update at the end of every session.
   tested with a fake adapter only.
 - **Non-editable `pip install ./backends`** finds the adapters only from a checkout's `./backends`
   (cwd search) or `RECAD_BACKENDS_DIR`. CI and docs use `-e`.
-- **NX (P4)**: `recadbench` console script now lives in the backends package with only `nx-run`;
+- ~~NX (P4)~~ (answered H8: the runner owns `recadbench` and forwards `nx-run`; backends no longer declares the script): `recadbench` console script now lives in the backends package with only `nx-run`;
   P10's runner CLI must take over the `recadbench` name and forward `nx-run` (or import
   `nx_run.main`), otherwise two packages define the same entry point.
-- **NX gate surface (P10)**: `allowed_commands` is `recadbench nx-run cad/*.py`, but a journal can
+- **NX gate surface (P10)** (H8: journals + run-dir .py are matched against denied_tools and the runner scan-code patterns, `open(` on input/ and mesh libs denied; runtime-built names remain best-effort): `allowed_commands` is `recadbench nx-run cad/*.py`, but a journal can
   still call any NX Open API (STEP import, file I/O, os/subprocess). The counter reports imports
   and dumb bodies as unmapped (gate fail), yet a journal could also read the scan from disk and
   analyse it in Python. gate_hook / compose should review journals (deny `import_*` importers,
@@ -152,7 +193,7 @@ Update at the end of every session.
 - M02-02-03 gear: is `M02-02-03.STL` a real scan? (provenance of the mesh)
 - Full-res originals of the golden-example scans are on Drive (`H:\My Drive\…`, see each MANIFEST.json `source_path`) — P6 must use those, not the decimated copies.
 - Decided: **scan storage = plain git** (no LFS) for v1 — scans < 100 MB/file, dev pool < 1 GB; LFS free bandwidth (1 GB/month) would not survive several workers. Revisit at M5.
-- **gt_plan.json frame:** authored in the gt.step frame (AUTHORING.md §6); P10 compose must map it into the scanner frame with inv(T_scan_to_gt) before Track T hands it to an agent.
+- ~~gt_plan.json frame~~ (answered H8: `recadbench seed-plan` maps it with inv(T_scan_to_gt), `frames.py`, round-trip tested): authored in the gt.step frame (AUTHORING.md §6); P10 compose must map it into the scanner frame with inv(T_scan_to_gt) before Track T hands it to an agent.
 - **Tier definitions** used in AUTHORING.md are still provisional (threads alone ≠ tier 3) — confirm in P11.
 - **`k` for the scan-floor band widening** (1.5 provisional) and the observability threshold — calibrate in P11.
 - **recadbench-data / recadbench-gt READMEs** still describe tessellated inputs — update in P6.

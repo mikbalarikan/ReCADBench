@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recadbench-orch"
+version = "0.1.0"
+description = "ReCADBench orchestrator: experiment expansion, SQLite job queue, pull-based worker"
+requires-python = ">=3.11"
+# queue + worker are stdlib-only (Termux); the worker runs jobs through recadbench-run;
+# expand reads YAML
+dependencies = ["recadbench-run", "pyyaml>=6"]
+
+[project.scripts]
+recadbench-orch = "recadbench_orch.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["recadbench_orch*"]

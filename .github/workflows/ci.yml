@@ -13,13 +13,16 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest -e ./spec -e ./evaluator -e ./runner -r dataset/requirements.txt
-          # L1 dispatcher (`recad`) + the build123d reference backend (cadquery-ocp-novtk wheels).
+          # one resolver run: the runner depends on the local backends package (recad, nx-run),
+          # the orchestrator on the runner. L1 dispatcher + the build123d reference backend
+          # (cadquery-ocp-novtk wheels) + build123d-mcp for the runner's end-to-end replay test.
           # FreeCAD / SolidCraft are not installed: their adapter tests are not in testpaths.
-          pip install -e ./backends build123d==0.13.0
+          pip install ruff pytest -e ./spec -e ./evaluator -e ./backends -e ./runner \
+            -e ./orchestrator -r dataset/requirements.txt build123d==0.13.0 build123d-mcp==0.3.91
       - name: Public-repo data guard
         run: python dataset/tools/check_public.py
       - name: Ruff
         run: ruff check .
       - name: Pytest
+        # runner/orchestrator: synthetic only; host-only tests skip without RECADBENCH_GT_DIR
         run: pytest
