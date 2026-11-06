@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recadbench-backends"
+version = "0.1.0"
+description = "ReCADBench L1 backend dispatcher: `recad <backend> export|extract|set-param|replay|execute-ir`"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "recadbench-spec",
+  "trimesh",
+]
+
+[project.optional-dependencies]
+# STEP measuring in the dispatcher when an adapter reports needs_measure
+measure = ["build123d==0.13.0"]
+
+[project.scripts]
+recad = "recad_cli.cli:main"
+
+[tool.setuptools.packages.find]
+# Only the dispatcher is a Python package. The backend folders (build123d/, freecad/, …) are
+# adapter scripts run in their own interpreters; never install them as packages (a top-level
+# `build123d` package would shadow the build123d library).
+include = ["recad_cli*"]

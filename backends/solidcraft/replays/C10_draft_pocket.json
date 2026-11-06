@@ -1,0 +1,17 @@
+{
+  "description": "ReCADBench conformance replay C10_draft_pocket: block 50x40x20; pocket rect 30x20 sketched on z=20, cut `pocket_depth` along -Z; draft `draft_deg` on the 4 pocket walls, neutral plane z=20, pull +Z (pocket narrows toward its floor)",
+  "ir": "backends/conformance/ir_cases/C10_draft_pocket/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "pocket_depth", "expression": "10 mm"}},
+    {"command": "parameters.add", "params": {"name": "draft_deg", "expression": "5 deg"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [25, 20]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": 20, "direction": "positive"}, "ir": "F1"},
+    {"command": "sketch.create", "params": {"plane": "XY", "offset": 20}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [15, 10]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": "pocket_depth", "direction": "negative", "operation": "cut"}, "ir": "F2"},
+    {"command": "solid.draft", "params": {"faces": [[15, 0, 19.5], [-15, 0, 19.5], [0, 10, 19.5], [0, -10, 19.5]], "angle": "draft_deg", "neutral": {"origin": [0, 0, 20], "normal": [0, 0, 1]}}, "ir": "F3"}
+  ]
+}

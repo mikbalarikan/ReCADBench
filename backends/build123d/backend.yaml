@@ -1,0 +1,54 @@
+# L1 pin: build123d backend (reference backend). Upstream build123d and pzfreo/build123d-mcp are
+# used unmodified. Agent path: Claude <-stdio-> build123d-mcp (persistent build123d session).
+# Install: install.md (desktop/CI pip route below; Termux route stays build123d 0.10.0).
+id: build123d
+software:
+  name: build123d-mcp
+  version: 0.3.91
+  source: pypi:build123d-mcp==0.3.91 (pzfreo/build123d-mcp, Apache-2.0); kernel build123d==0.13.0 (OCP 8)
+interface:
+  kind: mcp
+  mcp:
+    command: build123d-mcp
+    args: []
+  # NOTE for P10 (gate_hook / runner): `all` also covers build123d-mcp 0.3.91's read-only
+  # mesh / RE-analysis tools (mesh_section, mesh_holes, find_holes, find_hole_patterns,
+  # recognise_features, find_candidates, compare). On an STL loaded with import_cad_file they
+  # would give build123d agents RE analysis the other backends lack (strategies must use retk).
+  # import_cad_file is mutating and anything it brings in is `unmapped` (gate fail), but the
+  # analysis itself leaves no trace in the model. backend_manifest has no deny-list field yet
+  # (schema change => ADR); until then the runner should deny import_cad_file + mesh_* by name.
+  # `load_part` is only served with --library (hidden otherwise); kept for that case.
+  cad_prefixes:
+    all:
+    - mcp__build123d__
+    # tools of build123d-mcp 0.3.91 that change the session's model state (tool annotations
+    # read_only_hint=False, excluding export/bank_candidate/save_snapshot/resolve/
+    # save_drawing_annotations/install_skill, which write files or labels but not the model)
+    mutating:
+    - mcp__build123d__execute
+    - mcp__build123d__execute_file
+    - mcp__build123d__load_part
+    - mcp__build123d__import_cad_file
+    - mcp__build123d__edit_feature
+    - mcp__build123d__restore_snapshot
+    - mcp__build123d__reset
+    - mcp__build123d__destroy_session
+hosts:
+- linux
+- windows
+- macos
+- termux
+adapter_cli:
+  export: recad build123d export
+  extract: recad build123d extract
+  set_param: recad build123d set-param
+  replay: recad build123d replay
+  execute_ir: recad build123d execute-ir
+max_parallel: 2
+# Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+conformance:
+  passed: 10
+  total: 10
+  date: '2026-11-06'
+  software_version: build123d 0.13.0 (OCP 8) + build123d-mcp 0.3.91, Python 3.13 (Linux x86_64)

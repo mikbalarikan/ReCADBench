@@ -7,6 +7,5 @@
 **Index:**
 
 - [0001](0001-ir-params-anyof.md) — RE Plan IR `params` values: `oneOf` → `anyOf` (P2)
-- `0002-….md`, …
-
-Scaffolded in P1; no logic yet.
+- [0002](0002-real-scan-input.md) — Inputs are real scans in the scanner frame; v1 dev-only (spec 0.2.0)
+- [0003](0003-freecad-mcp-selection.md) — FreeCAD MCP selection: freecad-robust-mcp 0.6.1 (P3)
