@@ -4,10 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recadbench-eval"
-version = "0.0.0"
-description = "ReCADBench evaluator (gate, alignment, S1–S5)"
+version = "0.1.0"
+description = "ReCADBench evaluator (gate, alignment, S1-S5, plan score, report)"
 requires-python = ">=3.11"
-dependencies = ["recadbench-spec"]  # P1 stub: real dependencies added by the implementing prompt
+dependencies = [
+  "recadbench-spec",  # pinned by the repo checkout (spec-v0.3.0); downstream repos pin the tag
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "pyyaml>=6",
+  # B-rep kernel for STEP loading / tessellation / measurement. Pinned with the reference
+  # backend (backends/build123d/backend.yaml); the evaluator never imports adapter code.
+  "build123d==0.13.0",
+]
+
+[project.scripts]
+recadbench-eval = "recadbench_eval.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["recadbench_eval*"]

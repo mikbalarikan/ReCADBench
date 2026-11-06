@@ -28,7 +28,7 @@ dev-only, there's a registration step, a noise floor and observability.
 | Prompt | Status | Where |
 |---|---|---|
 | P1 scaffold + Termux spike | ✅ done. build123d-mcp exports STEP on the phone | all repos; `backends/build123d/install.md` |
-| P2 spec | ✅ `recadbench-spec` 0.1 → **0.2.0** (ADR 0002), tag **`spec-v0.2.0`** | `spec/` |
+| P2 spec | ✅ `recadbench-spec` 0.1 → 0.2.0 (ADR 0002) → **0.3.0** (ADR 0004, H3), tag **`spec-v0.3.0`** | `spec/` |
 | ADR 0002 real scans | ✅ accepted | `docs/adr/0002-real-scan-input.md`, D10 |
 | P6 tooling | ✅ `register_gt.py`, `make_task.py`, `scanreg.py`, AUTHORING.md, Windows fixes (#7) | `dataset/tools/`, `ReCADBench-gt/AUTHORING.md` |
 | P6 pilots | ✅ 3 R385 scan-rebuild parts (human NX ground truth), registered, in `-gt` and `-data` | `ReCADBench-gt/parts/`, `ReCADBench-data/parts/` |
@@ -82,7 +82,8 @@ Pilot ground-truth numbers (scan-to-GT, mm; all converged; tolerance class B):
   - `spec/` is the source of truth. A schema change needs an ADR plus a version bump plus a tag
     (`spec-vX.Y.Z`).
   - The cloud sessions **could not push tags**, so tags must be pushed from the desktop or phone.
-  - Downstream repos pin `recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.2.0#subdirectory=spec`.
+  - Downstream repos pin `recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.3.0#subdirectory=spec`
+    (spec 0.3.0, ADR 0004; `spec-v0.2.0` is superseded).
 - **Ground truth and data hygiene:**
   - Ground truth never enters the public repo or a worker's run directory.
   - Agent self-checks use the scan; the evaluator uses `gt.step`.
