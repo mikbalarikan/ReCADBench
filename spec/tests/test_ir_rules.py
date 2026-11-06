@@ -70,8 +70,8 @@ def test_selector_targets_must_exist() -> None:
     _check(lambda d: d["features"][3]["params"].update(edges="F9:edges:all"), "semantic", "unknown")
     _check(
         lambda d: d["features"][3]["params"].update(edges="F1:edges:sharp"),
-        "semantic",
-        "not a valid selector",
+        "schema",
+        "is not valid under any of the given schemas",  # typed param (0.3.0)
     )
     _check(lambda d: d["features"][0]["sketch"].update(plane="P_mid"), ok=True)
 
@@ -80,7 +80,9 @@ def test_pattern_features_must_be_earlier_feature_ids() -> None:
     _check(
         lambda d: d["features"][2]["params"].update(features=["F4"]), "semantic", "defined later"
     )
-    _check(lambda d: d["features"][2]["params"].update(features=[]), "semantic", "non-empty list")
+    _check(
+        lambda d: d["features"][2]["params"].update(features=[]), "schema", "should be non-empty"
+    )
     _check(lambda d: d["features"][2]["params"].update(features=["F3"]), "semantic", "itself")
 
 
@@ -111,8 +113,7 @@ def test_additional_properties_closed() -> None:
     )
 
 
-# The taxonomy names params but does not type them, so e.g. radius=[1, 2, 3, 4] is accepted today
-# (see STATUS.md open questions). These are invalid under the schema's value union.
+# Invalid under the schema value union (spec 0.3.0 also types each param, see test_spec_030.py).
 @pytest.mark.parametrize("bad", [None, {"ref": 1}, {"ref": "corner_r", "scale": 2}, {"value": 3}])
 def test_bad_param_values(bad) -> None:
     r = _check(lambda d: d["features"][3]["params"].update(radius=bad))

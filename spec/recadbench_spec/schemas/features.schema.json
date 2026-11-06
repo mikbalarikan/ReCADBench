@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/features/0.2.0",
+  "$id": "recadbench/features/0.3.0",
   "title": "Extracted features (adapter output)",
   "type": "object",
   "required": [
@@ -79,6 +79,51 @@
         }
       },
       "description": "Named/driving parameters found in the native model (for parametric-presence check)"
+    },
+    "not_in_final_part": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Traced native features that do not reach the final part (scratch / exploratory geometry). Informational: never counted, not unmapped."
+    },
+    "excluded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "native_type"
+        ],
+        "properties": {
+          "native_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "native_type": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Native items that are not in the model (suppressed / rolled back). Neither counted nor unmapped."
+    },
+    "final_part": {
+      "type": "string",
+      "description": "How the adapter identified the final part (e.g. the variable or body it used). Informational."
+    },
+    "bodies": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "description": "Names of the solid bodies in the native model. Informational."
     }
   }
 }

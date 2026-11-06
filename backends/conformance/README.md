@@ -9,7 +9,7 @@ A backend must pass before entering Track T (05_TOOLS.md, "Conformance").
 
 | Path | Content |
 |---|---|
-| `ir_cases/<case_id>/re_plan.v1.json` | 10 tool-neutral IR cases (spec 0.2.0), see [ir_cases/README.md](ir_cases/README.md) |
+| `ir_cases/<case_id>/re_plan.v1.json` | 10 tool-neutral IR cases (spec 0.3.0), see [ir_cases/README.md](ir_cases/README.md) |
 | `ir_cases/<case_id>/expected.json` | expected volume, faces (informational), feature count + types, set-param round trip, `tolerance_rel` |
 | `backends/<b>/replays/<case_id>.<ext>` | hand-written native replay per backend (build123d `.py` is the reference) |
 | `run_conformance.py` | runs every case on every available backend through the `recad` dispatcher, compares, checks cross-backend counts |

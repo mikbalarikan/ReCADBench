@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-SPEC_VERSION = "0.2.0"
+SPEC_VERSION = "0.3.0"  # ADR 0004
 DEFAULT_BUDGETS = {"max_wall_s": 3600, "max_turns": 200}
 DELIVERABLES = ["out/output.step", "cad/native", "plan/re_plan.vN.json"]
 # scan metadata that may be shown to the agent (what a customer would tell you)

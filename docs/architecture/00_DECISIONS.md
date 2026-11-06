@@ -98,6 +98,7 @@ runs/<run_id>/
 ### Gate enforcement
 - One `gate_hook.py`: Claude Code PreToolUse hook (SDK + interactive) and inside the LiteLLM dispatcher.
 - Shell denied, except the backend's allowlisted commands from `backend.yaml: allowed_commands` (NX: `recadbench nx-run cad/*.py` only).
+- Tools in `backend.yaml: denied_tools` (scan import / mesh analysis inside the CAD program; name prefix + optional argument regex) are always denied (ADR 0004).
 - CAD calls (MCP prefixes or allowlisted commands, from `backend.yaml`) are allowed only if a schema-valid `plan/re_plan.vN.json` exists; after a CAD-side change, the next execute needs revision N+1.
 - Track T: hook pre-seeds `re_plan.v1.json` from GT (oracle).
 

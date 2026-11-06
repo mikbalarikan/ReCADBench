@@ -38,7 +38,7 @@ count from `extract`.
 | **Passed** | | **10/10** | **10/10** | **10/10** | **10/10** |
 
 All 30 rows: exactly one solid, `features.json` valid against `features.schema.json`
-(recadbench-spec 0.2.0, checked by the dispatcher), `unmapped` empty, and taxonomy types equal
+(recadbench-spec 0.3.0 since ADR 0004; the runs above used 0.2.0 -- the features schema only gained optional keys, checked by the dispatcher), `unmapped` empty, and taxonomy types equal
 to `expected.features` in IR order. Face counts match `expected.faces` everywhere. They are
 informational and not gated.
 

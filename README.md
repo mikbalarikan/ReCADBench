@@ -11,7 +11,7 @@ model that recovers design intent ([ADR 0002](docs/adr/0002-real-scan-input.md))
 Architecture and build plan: [`docs/architecture/`](docs/architecture/README.md) (start with `00_DECISIONS.md`).
 Progress: [`STATUS.md`](STATUS.md).
 
-> Status: P1 scaffold + P2 spec (`recadbench-spec` 0.2.0). v1 data = scan-rebuild parts, **dev-only** (no frozen test split yet).
+> Status: P1 scaffold + P2 spec (`recadbench-spec` 0.3.0, ADR 0004). v1 data = scan-rebuild parts, **dev-only** (no frozen test split yet).
 
 ## Repositories
 
