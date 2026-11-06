@@ -328,7 +328,7 @@ def cmd_backends(as_json: bool) -> int:
 
 USAGE = (
     "usage: recad backends [--json]\n"
-    "       recad <backend> <export|extract|set-param|replay|execute-ir> [args…]\n"
+    "       recad <backend> <export|extract|set-param|replay|execute-ir> [args...]\n"
     f"backends: {', '.join(BACKENDS)}"
 )
 
@@ -347,7 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _emit({"ok": False, "error": f"unknown backend {args[0]!r}; "
                       f"known: {', '.join(BACKENDS)}"}, 2)
     if len(args) < 2 or (args[1].startswith("-") and args[1] not in ("-h", "--help")):
-        return _emit({"ok": False, "error": f"usage: recad {args[0]} <subcommand> …"}, 2)
+        return _emit({"ok": False, "error": f"usage: recad {args[0]} <subcommand> ..."}, 2)
     return run_adapter(args[0], args[1:])
 
 
