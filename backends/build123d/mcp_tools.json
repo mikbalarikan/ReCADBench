@@ -1,0 +1,216 @@
+{
+  "backend": "build123d",
+  "pin": "build123d-mcp 0.3.91",
+  "command": [
+    "build123d-mcp.exe"
+  ],
+  "server": {
+    "name": "build123d-mcp",
+    "version": "0.3.91"
+  },
+  "tools": [
+    {
+      "name": "analyze_printability",
+      "read_only_hint": true
+    },
+    {
+      "name": "bank_candidate",
+      "read_only_hint": false
+    },
+    {
+      "name": "compare",
+      "read_only_hint": true
+    },
+    {
+      "name": "crop_drawing",
+      "read_only_hint": true
+    },
+    {
+      "name": "cross_sections",
+      "read_only_hint": true
+    },
+    {
+      "name": "design_audit",
+      "read_only_hint": true
+    },
+    {
+      "name": "destroy_session",
+      "read_only_hint": false
+    },
+    {
+      "name": "edit_feature",
+      "read_only_hint": false
+    },
+    {
+      "name": "execute",
+      "read_only_hint": false
+    },
+    {
+      "name": "execute_file",
+      "read_only_hint": false
+    },
+    {
+      "name": "export",
+      "read_only_hint": false
+    },
+    {
+      "name": "find_bored_bosses",
+      "read_only_hint": true
+    },
+    {
+      "name": "find_bosses",
+      "read_only_hint": true
+    },
+    {
+      "name": "find_candidates",
+      "read_only_hint": true
+    },
+    {
+      "name": "find_countersinks",
+      "read_only_hint": true
+    },
+    {
+      "name": "find_hole_patterns",
+      "read_only_hint": true
+    },
+    {
+      "name": "find_holes",
+      "read_only_hint": true
+    },
+    {
+      "name": "health_check",
+      "read_only_hint": true
+    },
+    {
+      "name": "import_cad_file",
+      "read_only_hint": false
+    },
+    {
+      "name": "inspect_drawing",
+      "read_only_hint": true
+    },
+    {
+      "name": "inspect_part",
+      "read_only_hint": true
+    },
+    {
+      "name": "install_skill",
+      "read_only_hint": false
+    },
+    {
+      "name": "interface_features",
+      "read_only_hint": true
+    },
+    {
+      "name": "last_error",
+      "read_only_hint": true
+    },
+    {
+      "name": "lint_drawing",
+      "read_only_hint": true
+    },
+    {
+      "name": "list_sessions",
+      "read_only_hint": true
+    },
+    {
+      "name": "locate_gate_defects",
+      "read_only_hint": true
+    },
+    {
+      "name": "measure",
+      "read_only_hint": true
+    },
+    {
+      "name": "mesh_holes",
+      "read_only_hint": true
+    },
+    {
+      "name": "mesh_section",
+      "read_only_hint": true
+    },
+    {
+      "name": "prepare_drawing",
+      "read_only_hint": true
+    },
+    {
+      "name": "recognise_features",
+      "read_only_hint": true
+    },
+    {
+      "name": "render_drawing",
+      "read_only_hint": true
+    },
+    {
+      "name": "render_view",
+      "read_only_hint": true
+    },
+    {
+      "name": "repair_advice",
+      "read_only_hint": true
+    },
+    {
+      "name": "repair_hints",
+      "read_only_hint": true
+    },
+    {
+      "name": "reset",
+      "read_only_hint": false
+    },
+    {
+      "name": "resolve",
+      "read_only_hint": false
+    },
+    {
+      "name": "restore_snapshot",
+      "read_only_hint": false
+    },
+    {
+      "name": "save_drawing_annotations",
+      "read_only_hint": false
+    },
+    {
+      "name": "save_snapshot",
+      "read_only_hint": false
+    },
+    {
+      "name": "script",
+      "read_only_hint": true
+    },
+    {
+      "name": "session_state",
+      "read_only_hint": true
+    },
+    {
+      "name": "suggest_view_layout",
+      "read_only_hint": true
+    },
+    {
+      "name": "validate",
+      "read_only_hint": true
+    },
+    {
+      "name": "version",
+      "read_only_hint": true
+    },
+    {
+      "name": "view_axes",
+      "read_only_hint": true
+    },
+    {
+      "name": "workflow_hints",
+      "read_only_hint": true
+    }
+  ],
+  "not_mutating": {
+    "bank_candidate": "stores a labelled copy of the current shape; the model is unchanged",
+    "export": "writes a STEP/STL/... file only",
+    "install_skill": "writes a skill file for the client; no model access",
+    "resolve": "labels a feature reference; the model is unchanged",
+    "save_drawing_annotations": "writes a drawing-annotation file only",
+    "save_snapshot": "stores a named copy of the session; restore_snapshot is mutating"
+  },
+  "conditional": {
+    "load_part": "served only with `build123d-mcp --library`; hidden with the default args"
+  }
+}
