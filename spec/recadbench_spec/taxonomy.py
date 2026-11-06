@@ -5,8 +5,8 @@ is derived from it:
 
 * the RE Plan IR ``features[].type`` enum (`feature_type_enum`, and the schema's enum is checked
   against it by `check_ir_schema_sync`),
-* the per-type allowed ``params`` keys and the ``needs_sketch`` requirement, injected into the
-  compiled IR schema (`recadbench_spec.validate.compiled_schema`),
+* the per-type allowed ``params`` keys, their value types (spec 0.3.0) and the ``needs_sketch``
+  requirement, injected into the compiled IR schema (`recadbench_spec.validate.compiled_schema`),
 * the counting rule used for S2 parsimony (`Taxonomy.count`).
 """
 
@@ -25,12 +25,24 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 TAXONOMY_FILE = "feature_taxonomy.yaml"
 
 
-class TypeSpec(BaseModel):
-    """One canonical feature type."""
+class EnumType(BaseModel):
+    """A param type that only allows the listed strings (`{enum: [...]}` in the YAML)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    params: tuple[str, ...]
+    enum: tuple[str, ...] = Field(min_length=1)
+
+
+ParamType = str | EnumType
+
+
+class TypeSpec(BaseModel):
+    """One canonical feature type. ``params`` maps each allowed param name to its type
+    (spec 0.3.0, ADR 0004): a ``param_types`` name or an :class:`EnumType`."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    params: dict[str, ParamType]
     needs_sketch: bool
     note: str | None = None
 
@@ -49,6 +61,7 @@ class Taxonomy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     counting_rule: CountingRule
+    param_types: dict[str, str] = Field(min_length=1)
     types: dict[str, TypeSpec]
     face_types: tuple[str, ...] = Field(min_length=1)
 
@@ -65,8 +78,12 @@ class Taxonomy(BaseModel):
                 f"extra {sorted(counted - set(self.types))}"
             )
         for name, spec in self.types.items():
-            if len(set(spec.params)) != len(spec.params):
-                raise ValueError(f"duplicate params in type {name!r}")
+            for pname, ptype in spec.params.items():
+                if isinstance(ptype, str) and ptype not in self.param_types:
+                    raise ValueError(
+                        f"type {name!r} param {pname!r}: unknown param type {ptype!r}; "
+                        f"known: {sorted(self.param_types)}"
+                    )
         return self
 
     # -- queries ---------------------------------------------------------------------------
@@ -81,7 +98,14 @@ class Taxonomy(BaseModel):
         return frozenset(self.counting_rule.counted) | frozenset(self.counting_rule.not_counted)
 
     def allowed_params(self, feature_type: str) -> tuple[str, ...]:
-        return self._spec(feature_type).params
+        return tuple(self._spec(feature_type).params)
+
+    def param_type(self, feature_type: str, param: str) -> ParamType:
+        """Declared type of one param (``KeyError`` if the param is not allowed)."""
+        try:
+            return self._spec(feature_type).params[param]
+        except KeyError:
+            raise KeyError(f"param {param!r} is not allowed for type {feature_type!r}") from None
 
     def needs_sketch(self, feature_type: str) -> bool:
         return self._spec(feature_type).needs_sketch

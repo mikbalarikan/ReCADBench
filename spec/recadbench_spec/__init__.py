@@ -5,7 +5,9 @@ report = validate_file("plan/re_plan.v1.json")
 assert report.ok, report.errors
 """
 
-from .models import MODELS, SPEC_VERSION, FeatureType, RePlan
+from .ir import circular_offsets, circular_step
+from .migrate import Migration, MigrationError, migrate_document, needs_migration
+from .models import MIGRATABLE_VERSIONS, MODELS, SPEC_VERSION, FeatureType, RePlan
 from .taxonomy import Taxonomy, load_taxonomy
 from .validate import (
     SCHEMA_NAMES,
@@ -21,18 +23,25 @@ from .validate import (
 __version__ = SPEC_VERSION
 
 __all__ = [
+    "MIGRATABLE_VERSIONS",
     "MODELS",
     "SCHEMA_NAMES",
     "SPEC_VERSION",
     "FeatureType",
     "Issue",
+    "Migration",
+    "MigrationError",
     "RePlan",
     "Report",
     "Taxonomy",
+    "circular_offsets",
+    "circular_step",
     "compiled_schema",
     "detect_schema",
     "load_schema",
     "load_taxonomy",
+    "migrate_document",
+    "needs_migration",
     "validate_document",
     "validate_file",
     "__version__",

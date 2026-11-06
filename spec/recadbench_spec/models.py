@@ -21,11 +21,12 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from .taxonomy import feature_type_enum
 
-SPEC_VERSION = "0.2.0"
+SPEC_VERSION = "0.3.0"
+# versions whose documents `recadbench_spec.migrate` can upgrade to SPEC_VERSION
+MIGRATABLE_VERSIONS = ("0.2.0",)
 
 FeatureType = feature_type_enum()
 
-Vec2 = Annotated[list[float], Field(min_length=2, max_length=2)]
 Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]
 Identifier = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
 SELECTOR_PATTERN = (
@@ -91,7 +92,7 @@ InputKind = Literal["scan", "synthetic_clean", "synthetic_degraded"]
 class Task(_Document):
     """`task.yaml` — agent-visible task card."""
 
-    spec_version: Literal["0.2.0"]
+    spec_version: Literal["0.3.0"]
     part_id: str
     input_stl: str
     input_kind: InputKind
@@ -131,6 +132,10 @@ class ParamRef(_Closed):
 # order matters for pydantic "smart" unions only as a tie-break; exact-type matches win
 ParamValue = bool | int | float | str | ParamRef | list[Any]
 
+# spec 0.3.0 (ADR 0004): every sketch number may be bound to a parameter
+Num = float | ParamRef
+Vec2 = Annotated[list[Num], Field(min_length=2, max_length=2)]
+
 
 class Line(_Closed):
     kind: Literal["line"]
@@ -144,9 +149,9 @@ class Arc(_Closed):
     kind: Literal["arc"]
     id: str | None = None
     center: Vec2
-    radius: float
-    start_deg: float
-    end_deg: float
+    radius: Num
+    start_deg: Num
+    end_deg: Num
     construction: bool | None = None
 
 
@@ -154,7 +159,7 @@ class Circle(_Closed):
     kind: Literal["circle"]
     id: str | None = None
     center: Vec2
-    radius: float
+    radius: Num
     construction: bool | None = None
 
 
@@ -162,9 +167,9 @@ class Rect(_Closed):
     kind: Literal["rect"]
     id: str | None = None
     center: Vec2
-    width: float
-    height: float
-    angle_deg: float | None = None
+    width: Num
+    height: Num
+    angle_deg: Num | None = None
 
 
 class Slot(_Closed):
@@ -172,7 +177,7 @@ class Slot(_Closed):
     id: str | None = None
     c1: Vec2
     c2: Vec2
-    radius: float
+    radius: Num
 
 
 class Polygon(_Closed):
@@ -230,7 +235,7 @@ class ReferencePlane(_Closed):
 class RePlan(_ClosedDocument):
     """`plan/re_plan.vN.json` (and GT `gt_plan.json`) — the L3→L2 seam."""
 
-    spec_version: Literal["0.2.0"]
+    spec_version: Literal["0.3.0"]
     part_id: str
     revision: Annotated[int, Field(ge=1)]
     units: Literal["mm"]
@@ -357,6 +362,12 @@ class NativeParameter(_Open):
     feature: str | None = None
 
 
+class ExcludedItem(_Open):
+    native_name: str | None = None
+    native_type: str
+    reason: str | None = None
+
+
 class Features(_Document):
     """`features.json` — adapter output (never agent self-report)."""
 
@@ -368,6 +379,10 @@ class Features(_Document):
     native_sha256: str | None = None
     face_count: int | None = None
     parameters: list[NativeParameter] | None = None
+    not_in_final_part: list[str] | None = None
+    excluded: list[ExcludedItem] | None = None
+    final_part: str | None = None
+    bodies: list[str | None] | None = None
 
 
 # --------------------------------------------------------------------------- backend manifest
@@ -410,6 +425,12 @@ class Conformance(_Open):
     software_version: str | None = None
 
 
+class DeniedTool(_Closed):
+    tool: Annotated[str, StringConstraints(min_length=1)]
+    args_regex: Annotated[str, StringConstraints(min_length=1)] | None = None
+    reason: Annotated[str, StringConstraints(min_length=1)]
+
+
 class BackendManifest(_Document):
     """`backends/<b>/backend.yaml` — L1 pin."""
 
@@ -420,6 +441,7 @@ class BackendManifest(_Document):
     adapter_cli: AdapterCli
     max_parallel: Annotated[int, Field(ge=1)]
     conformance: Conformance | None = None
+    denied_tools: list[DeniedTool] | None = None
 
 
 # -------------------------------------------------------------------------- skillset manifest

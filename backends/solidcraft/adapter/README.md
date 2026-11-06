@@ -72,7 +72,7 @@ rewritten textually inside feature parameters.
   parameter's display unit. The edited script is written to `--native-out` and rebuilt. The
   parameter's value is checked, then the script is exported (`volume_after`).
 
-## Taxonomy mapping (feature_taxonomy.yaml, spec 0.2.0)
+## Taxonomy mapping (feature_taxonomy.yaml, spec 0.3.0; type names unchanged since 0.1.0)
 
 | SolidCraft timeline type | taxonomy | counted |
 |---|---|---|

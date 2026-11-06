@@ -2,9 +2,11 @@
 
 Three layers, reported separately so a failure is easy to attribute:
 
+0. ``migration`` (optional, ``migrate=True``) — a document of an older spec version is first
+   upgraded by `recadbench_spec.migrate` (notes are reported as warnings).
 1. ``schema``   — the packaged JSON Schema (Draft 2020-12). For the RE Plan IR this is the
    *compiled* schema: the on-disk schema plus per-type rules generated from the taxonomy
-   (allowed ``params`` keys, ``sketch`` required when ``needs_sketch``).
+   (allowed ``params`` keys and their value types, ``sketch`` required when ``needs_sketch``).
 2. ``model``    — parsing into the pydantic model. Should never fail after layer 1; a failure
    here means the models drifted from the schemas.
 3. ``semantic`` — cross-field rules JSON Schema cannot express (references resolve, ids are
@@ -30,8 +32,9 @@ import yaml
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ValidationError
 
-from .models import MODELS, SPEC_VERSION
-from .taxonomy import Taxonomy, load_taxonomy
+from .migrate import CircularAngle, MigrationError, migrate_document, needs_migration
+from .models import MIGRATABLE_VERSIONS, MODELS, SPEC_VERSION
+from .taxonomy import EnumType, Taxonomy, load_taxonomy
 
 SCHEMA_NAMES: tuple[str, ...] = tuple(MODELS)
 
@@ -51,10 +54,8 @@ _BASENAMES = {
 }
 _PLAN_FILE = re.compile(r"^re_plan\.v([0-9]+)\.json$")
 
-# IR params whose string values must be selectors / feature ids (checked semantically)
-_SELECTOR_PARAMS = {"edges", "faces", "open_faces", "neutral", "plane", "axis", "direction", "path"}
-_FEATURE_LIST_PARAMS = {"features"}
-_FEATURE_ID_PARAMS = {"tool_feature"}
+# taxonomy param types whose string values are selectors (resolved semantically)
+_SELECTOR_TYPES = {"selector", "selectors", "direction"}
 _SELECTOR_RE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_]*(:(plane|cylinder|cone|sphere|torus|bspline|any):([+-][XYZ]|axis|any)"
     r":(max|min|any)(:[0-9]+)?|:edges:(all|outer|inner|convex|concave))?$"
@@ -138,8 +139,9 @@ def compiled_schema(name: str, taxonomy: Taxonomy | None = None) -> dict[str, An
     """The schema used for validation. For ``re_plan_ir``: on-disk schema + taxonomy rules.
 
     Generated per taxonomy type ``t``: ``if type == t then params.propertyNames ∈ params(t)``,
-    and ``required: [sketch]`` when ``needs_sketch(t)``. The ``type`` enum itself is replaced by
-    the taxonomy's list (the on-disk enum is kept in sync by a test).
+    each param value checked against its taxonomy type (``$defs/ptype_<type>`` or the listed
+    ``enum``; spec 0.3.0), and ``required: [sketch]`` when ``needs_sketch(t)``. The ``type`` enum
+    itself is replaced by the taxonomy's list (the on-disk enum is kept in sync by a test).
     """
     schema = load_schema(name)
     if name != "re_plan_ir":
@@ -150,7 +152,14 @@ def compiled_schema(name: str, taxonomy: Taxonomy | None = None) -> dict[str, An
     rules = []
     for t, spec in tax.types.items():
         then: dict[str, Any] = {
-            "properties": {"params": {"propertyNames": {"enum": list(spec.params)}}}
+            "properties": {
+                "params": {
+                    "propertyNames": {"enum": list(spec.params)},
+                    "properties": {
+                        name: _param_type_schema(ptype) for name, ptype in spec.params.items()
+                    },
+                }
+            }
         }
         if spec.needs_sketch:
             then["required"] = ["sketch"]
@@ -159,6 +168,12 @@ def compiled_schema(name: str, taxonomy: Taxonomy | None = None) -> dict[str, An
         )
     item["allOf"] = list(item.get("allOf", [])) + rules
     return schema
+
+
+def _param_type_schema(ptype: str | EnumType) -> dict[str, Any]:
+    if isinstance(ptype, EnumType):
+        return {"enum": list(ptype.enum)}
+    return {"$ref": f"#/$defs/ptype_{ptype}"}
 
 
 @cache
@@ -192,10 +207,30 @@ def load_document(path: str | Path) -> Any:
 
 # ------------------------------------------------------------------------------- validation
 def validate_document(
-    doc: Any, schema: str, *, source: str | Path | None = None, taxonomy: Taxonomy | None = None
+    doc: Any,
+    schema: str,
+    *,
+    source: str | Path | None = None,
+    taxonomy: Taxonomy | None = None,
+    migrate: bool = False,
+    circular_angle: CircularAngle | None = None,
 ) -> Report:
-    """Validate an already-loaded document. ``source`` enables file-name rules."""
+    """Validate an already-loaded document. ``source`` enables file-name rules.
+
+    ``migrate=True`` first upgrades a document of an older spec version (`MIGRATABLE_VERSIONS`)
+    in memory (`recadbench_spec.migrate.migrate_document`; ``circular_angle`` is passed on) and
+    validates the result; ``report.model`` is then the migrated document.
+    """
     report = Report(schema=schema, source=str(source) if source is not None else None)
+    if migrate and needs_migration(doc, schema):
+        try:
+            mig = migrate_document(doc, schema, circular_angle=circular_angle)
+        except MigrationError as exc:
+            report.issues.append(Issue("migration", "error", "/", str(exc)))
+            return report
+        doc = mig.document
+        for note in mig.notes:
+            report.issues.append(Issue("migration", "warning", "/", f"migrated: {note}"))
     validator = (
         _validator(schema)
         if taxonomy is None
@@ -204,6 +239,16 @@ def validate_document(
     for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.absolute_path)):
         report.issues.append(Issue("schema", "error", _pointer(err.absolute_path), err.message))
     if report.errors:
+        if needs_migration(doc, schema):
+            report.issues.append(
+                Issue(
+                    "schema",
+                    "error",
+                    "/spec_version",
+                    f"spec {doc['spec_version']} document (validator is {SPEC_VERSION}): upgrade "
+                    "it with `recadbench-spec migrate` or validate with --migrate",
+                )
+            )
         return report
     try:
         report.model = MODELS[schema].model_validate(doc)
@@ -217,7 +262,13 @@ def validate_document(
     return report
 
 
-def validate_file(path: str | Path, schema: str | None = None) -> Report:
+def validate_file(
+    path: str | Path,
+    schema: str | None = None,
+    *,
+    migrate: bool = False,
+    circular_angle: CircularAngle | None = None,
+) -> Report:
     """Load and validate a JSON/YAML file; the schema is detected from its name if omitted."""
     name = schema or detect_schema(path)
     if name is None:
@@ -225,7 +276,9 @@ def validate_file(path: str | Path, schema: str | None = None) -> Report:
             f"cannot detect the schema of {Path(path).name!r}; pass schema= (one of "
             f"{', '.join(SCHEMA_NAMES)})"
         )
-    return validate_document(load_document(path), name, source=path)
+    return validate_document(
+        load_document(path), name, source=path, migrate=migrate, circular_angle=circular_angle
+    )
 
 
 def _pointer(parts: Any) -> str:
@@ -274,7 +327,17 @@ def _sem_re_plan(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
     param_names = [p["name"] for p in params]
     for dup in _dupes(param_names):
         s.error("/parameters", f"parameter name {dup!r} is not unique")
+    param_values = {p["name"]: p["value"] for p in params}
     used_params: set[str] = set()
+
+    def use_ref(name: str, where: str, integer: bool = False) -> None:
+        used_params.add(name)
+        if name not in param_names:
+            s.error(where, f"references undeclared parameter {name!r}")
+        elif integer:
+            v = param_values[name]
+            if not (float(v).is_integer() and v >= 1):
+                s.error(where, f"count parameter {name!r} = {v} is not an integer >= 1")
 
     known = set(frame_ids)  # grows as features are declared: refs may only point backwards
     for i, f in enumerate(doc["features"]):
@@ -300,36 +363,96 @@ def _sem_re_plan(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
             )
         for j, sel in enumerate(f.get("refs") or []):
             resolve(sel, f"{base}/refs/{j}")
+        if f.get("sketch"):
+            for path, ref in _sketch_refs(f["sketch"]):
+                use_ref(ref, f"{base}/sketch/{path}")
         for key, val in f["params"].items():
             where = f"{base}/params/{key}"
-            if isinstance(val, dict) and "ref" in val:
-                used_params.add(val["ref"])
-                if val["ref"] not in param_names:
-                    s.error(where, f"references undeclared parameter {val['ref']!r}")
-            elif key in _FEATURE_ID_PARAMS:
-                if not isinstance(val, str):
-                    s.error(where, "must be a feature id")
-                else:
-                    resolve(val, where)
-            elif key in _FEATURE_LIST_PARAMS:
-                if not (isinstance(val, list) and val and all(isinstance(v, str) for v in val)):
-                    s.error(where, "must be a non-empty list of feature ids")
-                else:
-                    for v in val:
-                        resolve(v, where)
-            elif key in _SELECTOR_PARAMS:
+            ptype = tax.param_type(f["type"], key)  # schema guarantees the key is allowed
+            for path, ref in _value_refs(val):
+                use_ref(ref, where + path, integer=ptype == "count")
+            if ptype in ("feature_id", "feature_ids"):
+                for v in [val] if isinstance(val, str) else val:
+                    resolve(v, where)
+            elif ptype in _SELECTOR_TYPES:
                 for v in val if isinstance(val, list) else [val]:
                     if isinstance(v, str):
                         if not _SELECTOR_RE.match(v):
                             s.error(where, f"{v!r} is not a valid selector")
                         else:
                             resolve(v, where)
+        if f["type"] == "pattern_circular":
+            _check_circular(f["params"], base, s, param_values)
         known.add(f["id"])
 
     for unused in sorted(set(param_names) - used_params):
         s.warn("/parameters", f"parameter {unused!r} is not referenced by any feature")
     if doc["spec_version"] != SPEC_VERSION:  # pragma: no cover - schema const pins it today
         s.error("/spec_version", f"expected {SPEC_VERSION}")
+
+
+def _value_refs(val: Any, path: str = "") -> list[tuple[str, str]]:
+    """(json-pointer suffix, parameter name) of every {"ref"} inside a value."""
+    if isinstance(val, dict):
+        return [(path, val["ref"])] if "ref" in val else []
+    if isinstance(val, list):
+        out = []
+        for i, v in enumerate(val):
+            out.extend(_value_refs(v, f"{path}/{i}"))
+        return out
+    return []
+
+
+def _sketch_refs(sketch: dict) -> list[tuple[str, str]]:
+    out = []
+    for i, ent in enumerate(sketch["entities"]):
+        for key, val in ent.items():
+            out.extend(_value_refs(val, f"entities/{i}/{key}"))
+    return out
+
+
+def _check_circular(p: dict, base: str, s: _Sink, values: dict[str, float]) -> None:
+    """ADR 0004: angle_deg = total sweep (step = angle_deg / count), pitch_deg = step."""
+    where = f"{base}/params"
+    if "angle_deg" in p and "pitch_deg" in p:
+        s.error(where, "give at most one of angle_deg (total sweep) / pitch_deg (step)")
+        return
+
+    def num(v: Any) -> float | None:
+        if isinstance(v, dict):
+            v = values.get(v.get("ref"))
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    count = num(p.get("count"))
+    if count is None or count < 1 or not count.is_integer():
+        return  # reported by the schema / the count-parameter rule
+    if "pitch_deg" in p:
+        step = num(p["pitch_deg"])
+        if step is None:
+            return
+        sweep, key = step * count, "pitch_deg"
+    else:
+        sweep = num(p.get("angle_deg", 360))
+        if sweep is None:
+            return
+        step, key = sweep / count, "angle_deg"
+    if step == 0:
+        s.error(f"{where}/{key}", "a circular pattern needs a non-zero angle")
+    elif abs(sweep) > 360 + 1e-6:
+        s.error(f"{where}/{key}", f"instances overlap: total sweep {sweep:g} deg exceeds 360")
+    if key == "angle_deg" and count > 1 and abs(abs(sweep) - 360) > 1e-6:
+        if abs(abs(sweep * count) - 360) < 1e-6:
+            s.warn(
+                f"{where}/angle_deg",
+                f"angle_deg {sweep:g} x count {count:g} = 360: looks like a pitch; since spec "
+                "0.3.0 angle_deg is the total sweep (360 = full circle), use pitch_deg for a step",
+            )
+    if key == "pitch_deg" and abs(abs(sweep) - 360) < 1e-6:
+        s.warn(
+            f"{where}/pitch_deg",
+            "pitch_deg x count = 360 (a full circle): angle_deg 360 keeps the circle closed when "
+            "count is edited",
+        )
 
 
 def _sem_task(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
@@ -467,6 +590,28 @@ def _sem_backend(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
     conf = doc.get("conformance") or {}
     if {"passed", "total"} <= conf.keys() and conf["passed"] > conf["total"]:
         s.error("/conformance", "passed > total")
+    denied = doc.get("denied_tools")
+    if denied is None and iface["kind"] == "mcp":
+        s.warn(
+            "/denied_tools",
+            "no denied_tools: list the tools that import/analyse the scan inside the CAD program",
+        )
+    seen = set()
+    for i, d in enumerate(denied or []):
+        where = f"/denied_tools/{i}"
+        key = (d["tool"], d.get("args_regex"))
+        if key in seen:
+            s.error(where, f"duplicate entry {d['tool']!r}")
+        seen.add(key)
+        if iface["kind"] == "mcp":
+            prefixes = (iface.get("cad_prefixes") or {}).get("all") or []
+            if not any(d["tool"].startswith(a) for a in prefixes):
+                s.error(f"{where}/tool", f"{d['tool']!r} is not covered by cad_prefixes.all")
+        if "args_regex" in d:
+            try:
+                re.compile(d["args_regex"])
+            except re.error as exc:
+                s.error(f"{where}/args_regex", f"not a valid regex: {exc}")
 
 
 def _sem_skillset(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> None:
@@ -508,8 +653,10 @@ def _sem_run_manifest(doc: dict, s: _Sink, tax: Taxonomy, src: Path | None) -> N
             "Track T exposes GT plans ⇒ dev parts only; split must be 'dev' (00_DECISIONS D4)",
         )
     if doc["spec_version"] != SPEC_VERSION:
+        old = " (older, migratable)" if doc["spec_version"] in MIGRATABLE_VERSIONS else ""
         s.warn(
-            "/spec_version", f"pins spec {doc['spec_version']} but this validator is {SPEC_VERSION}"
+            "/spec_version",
+            f"pins spec {doc['spec_version']}{old} but this validator is {SPEC_VERSION}",
         )
     for key, val in doc["budgets"].items():
         if isinstance(val, (int, float)) and val <= 0:

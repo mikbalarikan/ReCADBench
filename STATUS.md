@@ -7,7 +7,8 @@ Update at the end of every session.
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
 | P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
-| P3 | Backends build123d / solidcraft / freecad + conformance suite | done (uncommitted, awaiting review/PR): 3 adapters, `recad` dispatcher, conformance 10/10 on all three, counts identical; FreeCAD MCP = freecad-robust-mcp 0.6.1 (ADR 0003) |
+| P3 | Backends build123d / solidcraft / freecad + conformance suite | done (#8); H1: conformance 10/10 on all three on windows too, MCP tool-list snapshots + CI check (PR h1-desktop-backends) |
+| H3 | Spec 0.3.0 (ADR 0004): sketch refs, typed params, pattern_circular, features keys, denied_tools, 0.2.0 migration | done (#11, tag `spec-v0.3.0`) |
 | P4 | NX backend (runner, adapter, replays) | done (H4, PR h4-nx-backend): `recadbench nx-run`, `recad nx` adapter, 10 replays, conformance 10/10 on NX 2206 (Windows), counts identical to build123d |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | todo |
@@ -18,6 +19,10 @@ Update at the end of every session.
 ## Log
 - 2026-11-06 — H4 review fixes (NX backend): (1) boolean folding measures the body operand as the target's parent closure, not every earlier feature (unrelated earlier body gave NX 5 vs build123d 4; now 4 on NX 2206, CI + host test); (2) user expressions = `IsUserSpecified` (measured, survives reopen), so IR names like `p1_width` / `Pattern_pitch` stay in parameters[] (host test); (3) STL imported as a JT facet body (no feature row, no solid) is now unmapped via `part.FacetedBodies` without an associated body, `facet_bodies` in last_run.json / features.json (host tests Jt + Psm). Re-run: conformance nx 10/10 + build123d 10/10, counts identical (C01 1, C02 2, C03 2, C04 2, C05 3, C06 3, C07 3, C08 2, C09 3, C10 3), set-param ok; full suite 259 passed, 1 skipped (NX host); ruff + check_public OK.
 - 2026-11-06 — H4/P4 NX backend (ASUS, NX 2206): `backends/nx/` runner (`recadbench nx-run cad/<j>.py` over run_journal.exe: part create/open, journal via runpy, save only on success = transaction per run, timeout + child-tree kill, host-wide NX lock for max_parallel 1, logs, syslog excerpt of this run, `cad/last_run.json` with the measured feature list), adapter (`recad nx export|extract|set-param|replay|version`; NX-side `nx_measure.py`, pure `nx_taxonomy.py` mapping measured on NX 2206; set-param on a copy; build123d STEP read-back in a child process), 10 replays (`_nxr.py`, self-contained), backend.yaml (cli, `allowed_commands: recadbench nx-run cad/*.py`, max_parallel 1). Conformance nx 10/10 + build123d 10/10 same run, counts/types identical, all errors < 3e-9, faces = expected. Unmapped proven on NX: Remove Parameters body, STEP-imported body (also when united into a parametric body), assembly components. `recad` routes nx (`RECAD_NX_PYTHON`); minimal `recadbench` console script (nx-run only) in the backends package. Tests: backends/nx/tests (9 taxonomy + 4 CI runner/adapter + 5 NX-host, skip without NX) in testpaths; full suite 253 passed, 1 skipped on the ASUS.
+- 2026-11-06 — H3 review fixes: freecad `denied_tools` now covers `create_macro` (same args_regex as `execute_python`; the code is visible) and denies `run_macro` outright (list re-derived from freecad-robust-mcp 0.6.1 `freecad_mcp/tools/*.py`); FreeCAD / build123d code regexes are case-sensitive and import-shaped (a variable `points`, "mesh" in a comment, `export_stl` to an output path stay allowed), JSON-aware word boundaries, + `input/` path references; ADR 0004 says args_regex on free-form code is best-effort; +21 deny cases. Migration keeps a `{ref}` pitch binding (`pitch_deg: {ref}`), notes dropped bindings, wraps scalar `number_list` values and fails with a named error on other values the 0.3.0 typed params reject (docstring/ADR no longer claim pure widening).
+- 2026-11-06 — H3 / ADR 0004, recadbench-spec **0.3.0**: `{"ref"}` for every sketch number; taxonomy `params: {name: type}` (12 types + enums, `$defs/ptype_*`, compiled IR schema type-checks them, semantic id resolution by type); `pattern_circular.angle_deg` = total sweep (step = angle/count, 360 = full circle) + new `pitch_deg`, `recadbench_spec.circular_offsets`; features.schema `not_in_final_part` / `excluded` / `final_part` / `bodies`; backend.yaml `denied_tools` [{tool prefix, args_regex?, reason}] filled for build123d / freecad / solidcraft; `recadbench_spec.migrate` + `recadbench-spec migrate` / `validate --migrate` (0.2.0 circular angle needs pitch|span|sweep). build123d execute-ir on 0.3.0 (sketch refs drive set-param, new pattern semantics). `dataset/tools/check_gt_patterns.py` + host-only test: all 6 pilot patterns match gt.step after migration (it caught a wrong HS04 pad seed, fixed in ReCADBench-gt). Re-validated: spec examples, 10 conformance IRs, 3 backend.yaml (strict), pilot gt_plan/meta/key_dims, data task.yaml. No contract files exist yet in -cad-skills / -strategies.
+- 2026-11-06 — H1 fixer (review of PR #9): the FreeCAD pin was mis-described as "the one reproducible 26.3": conda-forge `freecad=2026.09.16` is upstream tag `weekly-2026.09.16` (a4ce44d33), a development snapshot older than 26.3rc1 (2026-10-08) / rc2 (2026-10-18); stable is 1.1.4. Recorded honestly in backend.yaml (`version: 26.3.0-dev`), install.md, READMEs, CONFORMANCE.md; pin kept, re-pin is an open question below. `mcp_tools.py`: a set but nonexistent `RECAD_*_MCP` / `RECAD_SOLIDCRAFT_CLI` / `RECAD_FREECAD_CMD|BRIDGE` now raises `MisconfiguredError` and the host-only live test fails instead of skipping; new check rule 5 (a `mutating` tool the server annotates `readOnlyHint=true`); synthetic tests for rule 4 (`cad_prefixes.all`) and rule 5, each failing on the old code / killing the rule-4 mutation. Reruns on windows: ruff clean, pytest 263 passed (venv, all three backend envs set), live MCP tools/list 3/3 match snapshots, freecad adapter tests 43 passed, conformance 30/30 identical, check_public OK.
+- 2026-11-06 — H1 (P3 on the desktop, Windows 11 x64): conformance 30/30 through `recad` on windows (build123d 0.13.0 venv, FreeCAD = the pinned conda-forge `freecad=2026.09.16` win-64 build (weekly-2026.09.16 dev snapshot, reports 26.3.0; see the fixer line above), solidcraft-cli 0.30.1 release portable zip with sha256 matching SHA256SUMS.txt), volumes/counts identical to the Linux run; also FreeCAD 1.1.1 bundle 10/10 (not the pin). FreeCAD pin kept (corrected justification: same conda-forge build a4ce44d33 on both OSes; it is a pre-RC dev build, not 26.3). Adapter suites on windows: 142 + freecad 43 + solidcraft 40 pass. New `backends/conformance/mcp_tools.py` + `backends/<b>/mcp_tools.json` snapshots (build123d-mcp 48 tools, freecad-robust-mcp 0.6.1 83 tools, solidcraft 21 tools) with a CI check against `cad_prefixes.mutating` and a host-only live refresh test; found freecad `recompute_document` missing from `mutating` (added). Windows fixes: freecad tests find FreeCAD.pyd in conda `Library\bin`/bundle `bin` (skipped before), explicit UTF-8 reads in backend tests/runner, `.gitattributes` keeps snapshots LF under autocrlf, conda `freecadcmd.exe` needs the env DLL dirs on PATH (documented, handled by mcp_tools.py).
 - 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
 - 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
 - 2026-11-06 — P3: L1 backends build123d (0.13.0 + build123d-mcp 0.3.91, reference, `execute-ir`), freecad (FreeCAD 26.3 + freecad-robust-mcp 0.6.1, ADR 0003), solidcraft (solidcraft-cli 0.30.1): `backend.yaml`, install.md, adapters (export / extract / set-param / replay), 10 replays each, review fixes (dumb-solid fillet/mirror → unmapped, dead ops not counted, Boolean tool bodies, C09/C10 solidcraft replays, usage errors → one JSON). `recad` dispatcher (`backends/recad_cli`, package recadbench-backends 0.1.0): subprocess per call with the backend interpreter, features.json validation, needs_measure STEP measuring, `recad backends`. `backends/conformance/run_conformance.py`: 30/30 case×backend pass, cross-backend counts identical (CONFORMANCE.md). CI now installs ./backends + build123d 0.13.0 and runs backends/tests (28) + backends/build123d/tests (64); full suite 223 passed. FreeCAD (41) and SolidCraft (40) adapter tests pass locally, not in CI.
@@ -35,14 +40,23 @@ Update at the end of every session.
 - **NX surface features**: Sew, Thicken, Bounded Plane, Trim Sheet, Extend Sheet, ... have no entry in `nx_taxonomy.CLASS_MAP`, so they count as unknown -> unmapped; only Swept / Sweep Along Guide / Through Curves / Curve Mesh map. Map them (e.g. to freeform_region, a taxonomy decision) or keep the nx-surface-modeling skill Tier-3 only?
 - **Mirror Body** (Extract Geometry > Mirror Body, type MIRROR) was not measured on the counter; if its class is not `Mirror` it is unmapped.
 
+### From H1 (P3 on the desktop)
+- **FreeCAD pin is a pre-RC development build** (main session to decide): conda-forge `freecad=2026.09.16` = upstream `weekly-2026.09.16` (git a4ce44d33, reports 26.3.0 dev), three weeks older than 26.3rc1; not a release. Options: keep it (same build on linux-64 + win-64, both conformance runs), re-pin to 26.3rc2, to stable 1.1.4 (2026-09-28; only 1.1.1 was tested, 10/10), or to 26.3 final once released. Any re-pin: rerun conformance + `mcp_tools.py refresh` on both hosts. ADR 0003 still says "FreeCAD 26.3" for the same build (historical wording, not edited).
+- **freecad-robust-mcp 0.6.1 needs a running bridge even for `tools/list`** (it connects during initialize and exits otherwise). The runner must start the bridge before the agent's MCP client; the snapshot refresh starts a private one.
+- **freecad-robust-mcp 0.6.1 has no tool annotations**: the 31 non-mutating tools are listed by hand in `backends/freecad/mcp_tools.json` `not_mutating`. Any new tool after a pin bump fails the check until classified. Its serverInfo reports `freecad-mcp 1.30.0` (the mcp library version), not 0.6.1.
+- **Stale SolidCraft 0.19.0** is installed in Program Files on the evaluator host and is not on PATH; workers must set `RECAD_SOLIDCRAFT_CLI` to the 0.30.1 binary explicitly.
+- **git autocrlf=true** on the Windows host: working-tree files are CRLF. Only the MCP snapshots are forced to LF (`.gitattributes`); a repo-wide `* text=auto eol=lf` would make Windows checkouts byte-equal to Linux ones (owner decision, touches every file).
+
 ### From P3 (backends)
-- **CAD MCPs expose RE analysis** (P10): build123d-mcp 0.3.91 has read-only `mesh_section`,
-  `mesh_holes`, `find_holes`, `recognise_features`, `compare` …; with `import_cad_file` an agent can
-  analyse the scan inside the backend (strategies must use retk only, identical across backends).
-  Importing is mutating and leaves `unmapped`, but import → analyse → reset leaves no trace. The
-  same holds for freecad `import_stl` / solidcraft `pointcloud.*`. `backend_manifest` has no deny
-  list (schema change ⇒ ADR); runner/gate_hook should deny import + mesh tools by name.
-- **docs/adr/README.md index** lists only 0001; add 0002 and 0003.
+- ~~CAD MCPs expose RE analysis~~ → ADR 0004 `backend.yaml: denied_tools`. **P10 gate_hook must
+  implement the matcher** (name prefix + `re.search(args_regex, json.dumps(args))`, see
+  `backends/tests/test_denied_tools.py`). **args_regex on free-form code is best-effort**: code
+  that builds module names / paths at runtime (e.g. `getattr(b, 'import_' + 'stl')` on a computed
+  path) and build123d `execute_file` script bodies are not caught. Residual-risk options for P10:
+  hide `input/` from the CAD process (only retk reads the scan), and/or fail a run whose
+  `extract` reports imported shells as `unmapped` / whose session holds Mesh::/Points:: objects.
+  FreeCAD `run_macro` is denied outright. The solidcraft list was not checked against a live
+  `tools/list` on this host (not installed).
 - **SolidCraft on Termux ARM64 is untested.** `termux` is not in solidcraft `hosts`; the test steps
   are in `backends/solidcraft/install.md` ("Termux test"). Run them on the phone before listing it.
 - **build123d on Termux stays on 0.10.0** (PoCAD route, install.md B) while the desktop/CI pin is
@@ -93,14 +107,20 @@ Update at the end of every session.
 - **recadbench-data / recadbench-gt READMEs** still describe tessellated inputs — update in P6.
 - **No frozen test split** until `print_scan` (OGUZ print + scan) parts exist.
 
+### From H3 (spec 0.3.0, ADR 0004)
+- **Tag + pins:** after the H3 PRs merge, the main session tags `spec-v0.3.0` from the desktop and bumps
+  the pins (checklist in the PR body). No downstream pyproject pins `spec-v0.2.0` today.
+- **Scanner scale never verified** against a reference artifact (gauge block / calibrated sphere) —
+  physical step, not done; affects every scan-rebuild GT floor.
+- **IR has no expressions** (`center_y = shaft_len / 2`), so a ref'd rect grows about its centre; C04
+  keeps the `sketch.constraints` binding. Hole `positions` (vec3) cannot be refs.
+- **Pilot sketch dims are not bound yet** (75 unused-parameter warnings over the 3 pilots): GT authoring
+  pass with the new sketch refs (needed for S5 on pilots).
+- **retk ↔ IR:** `detect_holes.hole_groups` (polar groups) must be mapped to `pattern_circular` with the
+  0.3.0 meaning (total sweep / pitch_deg) in the P9 strategies.
+
 ### From P2 (spec)
-- **Sketch dimensions can't be parameters.** IR sketch entities (`rect.width`, `circle.radius`, …) take plain
-  numbers; only feature `params` accept `{"ref": name}`. So a plate's width/height can't be named
-  parameters, which limits S5 (`set_param`) to non-sketch dims, and the "unused parameter" warning fires
-  for GT authors who declare them. Allow `{"ref"}` in sketch numbers? (schema change → ADR, spec 0.2.0)
-- **Param values are untyped.** The taxonomy lists param *names* per type but not their types, so
-  `radius: [1, 2, 3, 4]` or `count: "two"` pass. Add `params: {name: type}` to the taxonomy so the
-  compiled schema can type-check? (taxonomy change → ADR)
+- ~~Sketch dimensions can't be parameters~~ / ~~param values are untyped~~ → ADR 0004 (spec 0.3.0).
 - **Semantic rules are stricter than the schemas** in a few places (listed in `spec/README.md`), e.g.
   Track T requires `split: dev` (the schema only checks it when present), and refs must point to
   *earlier* features. Confirm these match intent.

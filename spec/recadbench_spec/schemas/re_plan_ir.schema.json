@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/re_plan_ir/0.2.0",
+  "$id": "recadbench/re_plan_ir/0.3.0",
   "title": "RE Plan IR",
-  "description": "Tool-neutral reverse-engineering feature plan. Written by a strategy before any CAD call; consumed by tool harnesses and the evaluator. Describes design intent, not CAD commands. Coordinates are in the input STL frame (mm) — for scans this is the scanner frame (ADR 0002). File naming: plan/re_plan.v<revision>.json. The `type` enum and per-type `params` keys are generated from feature_taxonomy.yaml by recadbench-spec; this file lists types explicitly for readability.",
+  "description": "Tool-neutral reverse-engineering feature plan. Written by a strategy before any CAD call; consumed by tool harnesses and the evaluator. Describes design intent, not CAD commands. Coordinates are in the input STL frame (mm) — for scans this is the scanner frame (ADR 0002). File naming: plan/re_plan.v<revision>.json. The `type` enum, per-type `params` keys and their value types (`ptype_*`) are generated from feature_taxonomy.yaml by recadbench-spec; this file lists types explicitly for readability.",
   "type": "object",
   "required": [
     "spec_version",
@@ -15,7 +15,7 @@
   "additionalProperties": false,
   "properties": {
     "spec_version": {
-      "const": "0.2.0"
+      "const": "0.3.0"
     },
     "part_id": {
       "type": "string"
@@ -179,7 +179,7 @@
           },
           "params": {
             "type": "object",
-            "description": "Allowed keys per type in feature_taxonomy.yaml (checked by recadbench-spec). Values: number, string, vec3, or {\"ref\": parameter_name}.",
+            "description": "Allowed keys and their value types per feature type come from feature_taxonomy.yaml `params: {name: type}` (checked by the compiled schema of recadbench-spec; types are the `ptype_*` definitions below). Generic shape here: number, string, boolean, vec3, list, or {\"ref\": parameter_name}.",
             "additionalProperties": {
               "anyOf": [
                 {
@@ -195,16 +195,7 @@
                   "$ref": "#/$defs/vec3"
                 },
                 {
-                  "type": "object",
-                  "required": [
-                    "ref"
-                  ],
-                  "properties": {
-                    "ref": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": false
+                  "$ref": "#/$defs/param_ref"
                 },
                 {
                   "type": "array"
@@ -305,7 +296,7 @@
         "entities"
       ],
       "additionalProperties": false,
-      "description": "2D sketch on a datum/reference plane or face selector; coordinates in that plane's (x_dir, normal×x_dir) frame, mm.",
+      "description": "2D sketch on a datum/reference plane or face selector; coordinates in that plane's (x_dir, normal×x_dir) frame, mm. Every number (coordinates, sizes, angles) may be a {\"ref\": parameter} (spec 0.3.0) so sketch dimensions can be named parameters (S5).",
       "properties": {
         "plane": {
           "$ref": "#/$defs/selector"
@@ -362,13 +353,13 @@
                     "$ref": "#/$defs/vec2"
                   },
                   "radius": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "start_deg": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "end_deg": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "construction": {
                     "type": "boolean"
@@ -394,7 +385,7 @@
                     "$ref": "#/$defs/vec2"
                   },
                   "radius": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "construction": {
                     "type": "boolean"
@@ -421,13 +412,13 @@
                     "$ref": "#/$defs/vec2"
                   },
                   "width": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "height": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   },
                   "angle_deg": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   }
                 }
               },
@@ -454,7 +445,7 @@
                     "$ref": "#/$defs/vec2"
                   },
                   "radius": {
-                    "type": "number"
+                    "$ref": "#/$defs/num"
                   }
                 }
               },
@@ -527,10 +518,123 @@
     "vec2": {
       "type": "array",
       "items": {
-        "type": "number"
+        "$ref": "#/$defs/num"
       },
       "minItems": 2,
-      "maxItems": 2
+      "maxItems": 2,
+      "description": "Sketch point (x, y); each coordinate may be a {\"ref\"} (spec 0.3.0)."
+    },
+    "param_ref": {
+      "type": "object",
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Binds a value to a declared parameter (parameters[].name)."
+    },
+    "num": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/param_ref"
+        }
+      ],
+      "description": "A number or a {\"ref\": parameter} (spec 0.3.0: also inside sketches)."
+    },
+    "ptype_number": {
+      "$ref": "#/$defs/num",
+      "description": "taxonomy param type `number`: number or {\"ref\"}"
+    },
+    "ptype_count": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "$ref": "#/$defs/param_ref"
+        }
+      ],
+      "description": "taxonomy param type `count`: integer >= 1 or {\"ref\"} to an integer-valued parameter"
+    },
+    "ptype_boolean": {
+      "type": "boolean",
+      "description": "taxonomy param type `boolean`: true / false"
+    },
+    "ptype_string": {
+      "type": "string",
+      "description": "taxonomy param type `string`: free text, e.g. a thread designation"
+    },
+    "ptype_vec3": {
+      "$ref": "#/$defs/vec3",
+      "description": "taxonomy param type `vec3`: [x, y, z] numbers"
+    },
+    "ptype_vec3_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/vec3"
+      },
+      "minItems": 1,
+      "description": "taxonomy param type `vec3_list`: non-empty list of [x, y, z] points"
+    },
+    "ptype_number_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/num"
+      },
+      "minItems": 1,
+      "description": "taxonomy param type `number_list`: non-empty list of numbers / {\"ref\"}s"
+    },
+    "ptype_selector": {
+      "$ref": "#/$defs/selector",
+      "description": "taxonomy param type `selector`: one selector (datum / plane / feature id or face selector)"
+    },
+    "ptype_selectors": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/selector"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/selector"
+          },
+          "minItems": 1
+        }
+      ],
+      "description": "taxonomy param type `selectors`: one selector or a non-empty list of selectors"
+    },
+    "ptype_direction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/vec3"
+        },
+        {
+          "$ref": "#/$defs/selector"
+        }
+      ],
+      "description": "taxonomy param type `direction`: [x, y, z] vector or a datum / plane / face selector"
+    },
+    "ptype_feature_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+      "description": "taxonomy param type `feature_id`: id of an earlier feature"
+    },
+    "ptype_feature_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+      },
+      "minItems": 1,
+      "description": "taxonomy param type `feature_ids`: non-empty list of earlier feature ids"
     }
   }
 }

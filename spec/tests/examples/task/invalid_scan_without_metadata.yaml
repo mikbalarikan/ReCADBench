@@ -1,4 +1,4 @@
-spec_version: 0.2.0
+spec_version: 0.3.0
 part_id: synthetic_plate_01
 input_stl: input/input.stl
 input_kind: scan

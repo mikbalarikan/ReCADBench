@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/result/0.2.0",
+  "$id": "recadbench/result/0.3.0",
   "title": "Evaluation result",
   "type": "object",
   "required": [

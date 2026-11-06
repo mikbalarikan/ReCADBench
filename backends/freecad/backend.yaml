@@ -11,9 +11,18 @@ software:
     source: https://github.com/spkane/freecad-robust-mcp-and-more
     ref: robust-mcp-workbench-v0.6.1
   freecad:
-    version: '26.3'
-    build: 26.3.0 20260916 (a4ce44d3)
-    source: conda-forge freecad=2026.09.16 python=3.11 (Linux; occt 8.0.1); FreeCAD 26.3 bundle (Windows)
+    version: 26.3.0-dev
+    build: FreeCAD weekly-2026.09.16 development build (git a4ce44d33, reports 26.3.0 dev)
+    # This is NOT a 26.3 release or release candidate: conda-forge freecad=2026.09.16 is built from
+    # the upstream tag weekly-2026.09.16 (commit a4ce44d33b7e), a pre-RC development snapshot three
+    # weeks older than 26.3rc1 (2026-10-08, faa2c25b) and 26.3rc2 (2026-10-18, 9fb16e7f). "26.3.0"
+    # is only the version number of the development branch. Latest stable upstream is 1.1.4
+    # (2026-09-28). Kept for P3/H1 because the same conda-forge build exists on linux-64 and win-64
+    # and both conformance runs used it; re-pinning (26.3rc2, 26.3 final or stable 1.1.4) is an open
+    # question for the main session (STATUS.md). Windows (2026-11-06): win-64 py311h48521fb_0 (occt
+    # 8.0.1). The official FreeCAD 1.1.1 Windows bundle (stable, older than 1.1.4) also passes
+    # conformance 10/10 with identical counts; 1.1.4 was not tested.
+    source: conda-forge freecad=2026.09.16 python=3.11 (linux-64 and win-64; occt 8.0.1)
 interface:
   kind: mcp
   mcp:
@@ -58,6 +67,7 @@ interface:
     - mcp__freecad__undo
     - mcp__freecad__redo
     - mcp__freecad__recompute
+    - mcp__freecad__recompute_document  # same doc.recompute() as `recompute` (tools/documents.py)
     - mcp__freecad__open_document
     - mcp__freecad__close_document
     - mcp__freecad__save_document
@@ -75,10 +85,37 @@ adapter_cli:
   extract: recad freecad extract
   set_param: recad freecad set-param
   replay: recad freecad replay
+# ADR 0004: tools gate_hook denies because they import or analyse the scan inside FreeCAD (RE
+# analysis goes through retk). `tool` = tool-name prefix; with args_regex only calls whose JSON
+# arguments match are denied. Derived from the freecad-robust-mcp 0.6.1 tool modules
+# (freecad_mcp/tools/*.py); re-check on every pin bump (H1).
+# args_regex on free-form code (execute_python, create_macro) is BEST-EFFORT: it matches import-
+# shaped use of the Mesh / MeshPart / Points / ReverseEngineering modules (case-sensitive, so a
+# variable `points` or the word "mesh" in a comment is allowed), Mesh::/Points:: object types,
+# a load-style call on a mesh-file literal, and any reference to the workspace input/ folder.
+# Code that builds module names or paths at runtime is not caught; extract still reports
+# Mesh::/Points:: objects as unmapped (residual risk: STATUS open questions, P10).
+denied_tools:
+- tool: mcp__freecad__import_stl
+  reason: imports a mesh (the scan) into the document
+- tool: mcp__freecad__open_document
+  args_regex: '(?i)\.(stl|ply|obj|3mf)\b'
+  reason: opens a mesh file (the scan) as a document
+- tool: mcp__freecad__execute_python
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:Mesh|MeshPart|Points|ReverseEngineering)\b|(?:(?<!\w)|(?<=\\[nt]))(?:Mesh|MeshPart|Points|ReverseEngineering)(?:\.[A-Za-z_]|::)|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|insert|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf|ast)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: Python that loads or analyses a mesh / point cloud (Mesh, MeshPart, Points, ReverseEngineering) or reads the input/ folder
+- tool: mcp__freecad__create_macro
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:Mesh|MeshPart|Points|ReverseEngineering)\b|(?:(?<!\w)|(?<=\\[nt]))(?:Mesh|MeshPart|Points|ReverseEngineering)(?:\.[A-Za-z_]|::)|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|insert|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf|ast)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: macro body (create_macro `code`) that loads or analyses a mesh / point cloud or reads the input/ folder
+- tool: mcp__freecad__run_macro
+  reason: the macro body is not visible at run time (only its name); execute_python does the same with its code checked
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+# Hosts: linux (Linux x86_64) and windows (Windows 11 x64, conda-forge win-64 env), both 2026-11-06:
+# 10/10, identical counts and volume errors. MCP tools/list snapshot: mcp_tools.json (83 tools,
+# freecad-robust-mcp 0.6.1 + mcp 1.30.0; serverInfo reports the mcp library version 1.30.0).
 conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: FreeCAD 26.3 (adapter run with the conda-forge freecad Python 3.11)
+  software_version: FreeCAD weekly-2026.09.16 dev build (git a4ce44d33, reports 26.3.0; conda-forge freecad=2026.09.16, Python 3.11, occt 8.0.1); hosts linux x86_64 + windows x64

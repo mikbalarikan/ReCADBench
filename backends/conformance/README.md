@@ -9,11 +9,12 @@ A backend must pass before entering Track T (05_TOOLS.md, "Conformance").
 
 | Path | Content |
 |---|---|
-| `ir_cases/<case_id>/re_plan.v1.json` | 10 tool-neutral IR cases (spec 0.2.0), see [ir_cases/README.md](ir_cases/README.md) |
+| `ir_cases/<case_id>/re_plan.v1.json` | 10 tool-neutral IR cases (spec 0.3.0), see [ir_cases/README.md](ir_cases/README.md) |
 | `ir_cases/<case_id>/expected.json` | expected volume, faces (informational), feature count + types, set-param round trip, `tolerance_rel` |
 | `backends/<b>/replays/<case_id>.<ext>` | hand-written native replay per backend (build123d `.py` is the reference) |
 | `run_conformance.py` | runs every case on every available backend through the `recad` dispatcher, compares, checks cross-backend counts |
-| [`CONFORMANCE.md`](CONFORMANCE.md) | latest recorded results (date, versions, case × backend table) |
+| [`CONFORMANCE.md`](CONFORMANCE.md) | latest recorded results (date, versions, hosts, case × backend table, MCP tool lists) |
+| `mcp_tools.py` | `refresh`: live MCP `tools/list` of each pinned server → `backends/<b>/mcp_tools.json`; `check`: snapshot vs `backend.yaml` `cad_prefixes.mutating` (CI test: `backends/tests/test_mcp_tools.py`) |
 
 Cases: C01 block · C02 block + through hole · C03 counterbore · C04 revolved shaft + groove ·
 C05 3×2 linear pattern · C06 6× circular pattern · C07 fillet + chamfer · C08 shell (open top) ·

@@ -1,6 +1,6 @@
 # backends/freecad — L1 backend pin + adapter
 
-FreeCAD 26.3 + [freecad-robust-mcp](https://github.com/spkane/freecad-robust-mcp-and-more) 0.6.1,
+FreeCAD weekly-2026.09.16 dev build (reports 26.3.0, not a release; see install.md) + [freecad-robust-mcp](https://github.com/spkane/freecad-robust-mcp-and-more) 0.6.1,
 headless bridge in `freecadcmd` ([ADR 0003](../../docs/adr/0003-freecad-mcp-selection.md)). Upstream
 is never modified. The adapter is a measurement instrument (00_DECISIONS D3).
 
@@ -47,7 +47,7 @@ replay take the one remaining Body with a solid; their features are counted.
 Suppressed features and features after the Body `Tip` are not part of the result. They are
 skipped and noted on stderr.
 
-## Conformance (2026-11-06, FreeCAD 26.3): 10/10
+## Conformance (2026-11-06, FreeCAD weekly-2026.09.16 dev build): 10/10
 
 All cases match the expected volume (rel. error ≤ 2e-9), count and set-param volume, with
 counts identical to build123d and solidcraft. See [`../conformance/CONFORMANCE.md`](../conformance/CONFORMANCE.md)

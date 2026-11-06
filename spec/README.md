@@ -2,12 +2,13 @@
 
 The ReCADBench contracts: JSON Schemas, the feature taxonomy, pydantic v2 models and a validator.
 **Source of truth** for every repo. Schema changes need an ADR in `docs/adr/` (see
-[0001](../docs/adr/0001-ir-params-anyof.md), [0002](../docs/adr/0002-real-scan-input.md)) and a spec version bump. Downstream repos pin a tag.
+[0001](../docs/adr/0001-ir-params-anyof.md), [0002](../docs/adr/0002-real-scan-input.md),
+[0004](../docs/adr/0004-spec-030-known-gaps.md)) and a spec version bump. Downstream repos pin a tag.
 
 ## Install (pinned)
 
 ```bash
-pip install "recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.2.0#subdirectory=spec"
+pip install "recadbench-spec @ git+https://github.com/mikbalarikan/ReCADBench@spec-v0.3.0#subdirectory=spec"
 ```
 
 ## Use
@@ -17,6 +18,8 @@ recadbench-spec validate plan/re_plan.v1.json task.yaml      # schema detected f
 recadbench-spec validate --schema re_plan_ir candidate.json  # explicit schema
 recadbench-spec validate --json --strict plan/*.json         # machine output; warnings fail
 recadbench-spec schemas | taxonomy | compile-schema re_plan_ir
+recadbench-spec validate --migrate old/gt_plan.json             # 0.2.0 document, upgraded in memory
+recadbench-spec migrate --circular-angle pitch --write gt_plan.json   # rewrite a 0.2.0 file as 0.3.0
 ```
 
 Exit codes: `0` valid · `1` invalid (or warnings with `--strict`) · `2` usage error.
@@ -47,9 +50,14 @@ n = load_taxonomy().count(["sketch", "extrude", "hole", "pattern_linear"])  # �
 
 ## Validation layers
 
+0. **migration** (opt-in, `--migrate` / `migrate=True`) — a 0.2.0 `task` / `re_plan_ir` document is
+   upgraded first (`recadbench_spec.migrate`, ADR 0004); notes are reported as warnings. A 0.2.0
+   `pattern_circular.angle_deg` other than 360 needs `--circular-angle pitch|span|sweep`.
 1. **schema** — JSON Schema Draft 2020-12. For `re_plan_ir` the *compiled* schema is used: the on-disk
    schema plus rules generated from `feature_taxonomy.yaml` — per type, `params` keys must be in the
-   taxonomy's list, and `sketch` is required when `needs_sketch: true`. The `type` enum comes from
+   taxonomy's list, each value must match its declared type (`params: {name: type}`, types =
+   `$defs/ptype_*` or an `enum`; spec 0.3.0), and `sketch` is required when `needs_sketch: true`.
+   Sketch numbers may be `{"ref": parameter}` (0.3.0). The `type` enum comes from
    the taxonomy (a test keeps the readable enum on disk in sync). `recadbench-spec compile-schema re_plan_ir`
    prints it, e.g. for tool definitions.
 2. **model** — parse into the pydantic model. A failure here means models drifted from schemas (tests guard
@@ -58,10 +66,10 @@ n = load_taxonomy().count(["sketch", "extrude", "hole", "pattern_linear"])  # �
 
 | Schema | Errors | Warnings |
 |---|---|---|
-| `re_plan_ir` | `revision` == N in `re_plan.vN.json`; revision > 1 needs `change_log`; one primary datum, unique roles, no zero vectors; ids unique across datums, reference planes, features; `{"ref": p}` → declared parameter; parameter names unique; `sketch.plane`, `refs` and selector-valued params (`edges`, `faces`, `open_faces`, `neutral`, `plane`, `axis`, `direction`, `path` when strings) are valid selectors whose id is a datum, reference plane or **earlier** feature; `features` (pattern/mirror) = non-empty list of earlier feature ids; `tool_feature` = earlier feature id | unused parameter; sketch on a type with `needs_sketch: false` |
+| `re_plan_ir` | `revision` == N in `re_plan.vN.json`; revision > 1 needs `change_log`; one primary datum, unique roles, no zero vectors; ids unique across datums, reference planes, features; `{"ref": p}` → declared parameter; parameter names unique; `{"ref"}` in sketches → declared parameter; `count` refs → integer ≥ 1; `sketch.plane`, `refs` and params of type `selector` / `selectors` / `direction` (when strings) are valid selectors whose id is a datum, reference plane or **earlier** feature; `feature_id(s)` params = earlier feature ids; `pattern_circular`: at most one of `angle_deg` / `pitch_deg`, non-zero step, total sweep ≤ 360 | unused parameter; sketch on a type with `needs_sketch: false`; `angle_deg × count = 360` (looks like a 0.2.0 pitch); `pitch_deg × count = 360` (use `angle_deg: 360`) |
 | `features` | `taxonomy_type` known; `counted` agrees with the counting rule (exception: a `boolean` may be folded into the feature it merges); `count` == number of `counted: true` | non-empty `unmapped` (⇒ gate fail) |
 | `run_manifest` | skillset id `none` or `<backend>@vN` targeting `backend.id`; backend `none` ⇒ skillset `none`; strategy id `oracle`/`[A-Z]`; Track T ⇒ `split: dev`; budgets > 0 | `spec_version` ≠ this package |
-| `backend_manifest` | MCP: non-empty `cad_prefixes.all`, `mutating` ⊆ `all`; CLI: ≥1 allowed command; build123d has `execute_ir`; conformance passed ≤ total; `backend.yaml` sits in folder `<id>/` | `allowed_commands` on MCP; NX `max_parallel` ≠ 1 |
+| `backend_manifest` | MCP: non-empty `cad_prefixes.all`, `mutating` ⊆ `all`, `denied_tools[].tool` ⊆ `all`; `denied_tools[].args_regex` compiles, no duplicates; CLI: ≥1 allowed command; build123d has `execute_ir`; conformance passed ≤ total; `backend.yaml` sits in folder `<id>/` | `allowed_commands` on MCP; NX `max_parallel` ≠ 1; MCP backend without `denied_tools` |
 | `skillset_manifest` | `id` == `backend.id`; `skillset.yaml` in folder `<id>/`; no duplicate skills/agents/lib | |
 | `strategy_manifest` | only `oracle` may set `inject_gt_plan`; `strategy.yaml` in folder `<id>/`; ≥1 stage; no duplicate tools | oracle without `inject_gt_plan` |
 | `task` | unique deliverables; `input_stl` ends in `.stl`; budgets > 0; no `scan` block unless `input_kind: scan` (schema: `scan` required for scans) | |

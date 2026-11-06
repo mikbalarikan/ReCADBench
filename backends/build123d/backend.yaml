@@ -12,12 +12,7 @@ interface:
     command: build123d-mcp
     args: []
   # NOTE for P10 (gate_hook / runner): `all` also covers build123d-mcp 0.3.91's read-only
-  # mesh / RE-analysis tools (mesh_section, mesh_holes, find_holes, find_hole_patterns,
-  # recognise_features, find_candidates, compare). On an STL loaded with import_cad_file they
-  # would give build123d agents RE analysis the other backends lack (strategies must use retk).
-  # import_cad_file is mutating and anything it brings in is `unmapped` (gate fail), but the
-  # analysis itself leaves no trace in the model. backend_manifest has no deny-list field yet
-  # (schema change => ADR); until then the runner should deny import_cad_file + mesh_* by name.
+  # mesh / RE-analysis tools; they are listed in denied_tools below (ADR 0004).
   # `load_part` is only served with --library (hidden otherwise); kept for that case.
   cad_prefixes:
     all:
@@ -45,10 +40,42 @@ adapter_cli:
   set_param: recad build123d set-param
   replay: recad build123d replay
   execute_ir: recad build123d execute-ir
+# ADR 0004: tools gate_hook denies because they import or analyse the scan inside the CAD session
+# (RE analysis goes through retk, identical for every backend). `tool` = tool-name prefix;
+# with args_regex only calls whose JSON arguments match are denied. Checked against
+# build123d-mcp 0.3.91 tools/list.
+# args_regex on free-form code (execute, execute_file) is BEST-EFFORT: it matches the mesh
+# loaders (import_stl, import_threemf, Mesher), imports of mesh libraries, a load-style call on a
+# mesh-file literal and any reference to the workspace input/ folder; exporting (export_stl to an
+# output path) is allowed. Code that builds names or paths at runtime, or an execute_file script
+# (only its path is visible), is not caught; extract still reports imported geometry as unmapped
+# (residual risk: STATUS open questions, P10).
+denied_tools:
+- tool: mcp__build123d__import_cad_file
+  reason: imports a STEP/STL/3MF file (the scan) into the session
+- tool: mcp__build123d__mesh_
+  reason: mesh_section / mesh_holes analyse a mesh (the scan)
+- tool: mcp__build123d__find_
+  reason: find_holes / find_hole_patterns / find_bosses / find_bored_bosses / find_countersinks / find_candidates recognise features (RE analysis)
+- tool: mcp__build123d__recognise_features
+  reason: feature recognition (RE analysis)
+- tool: mcp__build123d__interface_features
+  reason: mounting-face recognition from recognised holes (RE analysis)
+- tool: mcp__build123d__compare
+  reason: compares shapes / files, e.g. the model against the scan (self-checks use retk self_deviation)
+- tool: mcp__build123d__execute
+  args_regex: '(?:(?<!\w)|(?<=\\[nt]))(?:import_stl|import_threemf|Mesher)\b|(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:trimesh|open3d|pymeshlab|meshio|pyvista|vtk|stl)\b|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: code that loads a mesh (the scan) into the session or reads the input/ folder
+- tool: mcp__build123d__execute_file
+  args_regex: '(?i)\.(stl|ply|obj|3mf)\b|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: executes a mesh file path or a script under input/
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+# Hosts: linux (Linux x86_64, 2026-11-06) and windows (Windows 11 x64, 2026-11-06): 10/10 on both,
+# identical counts and volume errors. MCP tools/list snapshot: mcp_tools.json (48 tools,
+# checked against cad_prefixes by backends/tests/test_mcp_tools.py).
 conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: build123d 0.13.0 (OCP 8) + build123d-mcp 0.3.91, Python 3.13 (Linux x86_64)
+  software_version: build123d 0.13.0 (OCP 8, cadquery-ocp-novtk 8.0.1.1) + build123d-mcp 0.3.91, Python 3.13; hosts linux x86_64 + windows x64

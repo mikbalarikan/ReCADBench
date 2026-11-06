@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/gt_meta/0.2.0",
+  "$id": "recadbench/gt_meta/0.3.0",
   "title": "meta.yaml (GT, private)",
   "type": "object",
   "required": [

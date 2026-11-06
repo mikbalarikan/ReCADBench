@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/task/0.2.0",
+  "$id": "recadbench/task/0.3.0",
   "title": "Task card (agent-visible)",
   "type": "object",
   "required": [
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "spec_version": {
-      "const": "0.2.0"
+      "const": "0.3.0"
     },
     "part_id": {
       "type": "string"

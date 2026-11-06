@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recadbench/backend_manifest/0.2.0",
+  "$id": "recadbench/backend_manifest/0.3.0",
   "title": "backend.yaml (L1, pinned external interface)",
   "type": "object",
   "required": [
@@ -181,6 +181,32 @@
         },
         "software_version": {
           "type": "string"
+        }
+      }
+    },
+    "denied_tools": {
+      "type": "array",
+      "description": "Agent tool calls gate_hook must deny (ADR 0004): tools that import or analyse the scan inside the CAD program (RE analysis must go through retk, identical for every backend). `tool` is a prefix of the MCP tool name (kind=mcp, like cad_prefixes) or of the command line (kind=cli). With `args_regex`, only calls whose JSON-serialised arguments match the Python regex are denied.",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string",
+            "minLength": 1
+          },
+          "args_regex": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

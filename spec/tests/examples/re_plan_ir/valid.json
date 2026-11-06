@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.0",
+  "spec_version": "0.3.0",
   "part_id": "synthetic_plate_01",
   "revision": 2,
   "units": "mm",
@@ -49,6 +49,14 @@
       "value": 8
     },
     {
+      "name": "plate_w",
+      "value": 80
+    },
+    {
+      "name": "plate_h",
+      "value": 60
+    },
+    {
       "name": "hole_d",
       "value": 6.6,
       "measured": 6.62,
@@ -57,6 +65,10 @@
     {
       "name": "corner_r",
       "value": 5
+    },
+    {
+      "name": "n_vents",
+      "value": 4
     }
   ],
   "features": [
@@ -73,8 +85,12 @@
               0,
               0
             ],
-            "width": 80,
-            "height": 60
+            "width": {
+              "ref": "plate_w"
+            },
+            "height": {
+              "ref": "plate_h"
+            }
           }
         ],
         "constraints": [
@@ -159,10 +175,49 @@
         },
         "edges": "F1:edges:outer"
       }
+    },
+    {
+      "id": "F5",
+      "type": "hole",
+      "operation": "cut",
+      "params": {
+        "diameter": 4,
+        "through": true,
+        "kind": "simple",
+        "positions": [
+          [
+            12,
+            0,
+            8
+          ]
+        ]
+      },
+      "refs": [
+        "F1:plane:+Z:max"
+      ]
+    },
+    {
+      "id": "F6",
+      "type": "pattern_circular",
+      "params": {
+        "features": [
+          "F5"
+        ],
+        "axis": "D2",
+        "count": {
+          "ref": "n_vents"
+        },
+        "angle_deg": 360
+      },
+      "evidence": {
+        "source": "detect_holes",
+        "note": "4 vents, full circle (angle_deg = total sweep)"
+      }
     }
   ],
   "change_log": [
-    "v2: hole \u00d8 snapped 6.62 \u2192 6.6 (ISO 273 M6 medium) after detect_holes on region R3"
+    "v2: hole Ø snapped 6.62 → 6.6 (ISO 273 M6 medium) after detect_holes on region R3",
+    "F5/F6: four vent holes on a circle about D2"
   ],
   "reference_planes": [
     {

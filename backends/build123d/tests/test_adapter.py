@@ -34,7 +34,7 @@ def run(*args: str, expect_ok: bool = True) -> dict:
 
 
 def expected(case: str) -> dict:
-    return json.loads((CASES_DIR / case / "expected.json").read_text())
+    return json.loads((CASES_DIR / case / "expected.json").read_text(encoding="utf-8"))
 
 
 def close(v: float, ref: float, rel: float) -> bool:
@@ -68,7 +68,7 @@ def test_replay_matches_expected(case, replays):
     assert res["unmapped"] == []
     for name in ("native.py", "output.step", "features.json"):
         assert (out / name).is_file()
-    doc = json.loads((out / "features.json").read_text())
+    doc = json.loads((out / "features.json").read_text(encoding="utf-8"))
     assert doc["tool"] == "build123d" and doc["count"] == exp["feature_count"]
     assert sum(f["counted"] for f in doc["features"]) == doc["count"]
     validate_features(out / "features.json")
@@ -84,7 +84,8 @@ def test_replay_set_param_round_trip(case, replays, tmp_path):
     assert close(res["volume_before_mm3"], exp["volume_mm3"], exp["tolerance_rel"])
     assert close(res["volume_after_mm3"], sp["volume_mm3"], exp["tolerance_rel"]), res
     assert (tmp_path / "sp.step").is_file()
-    assert f"{sp['name']} = {float(sp['value'])!r}" in (tmp_path / "sp.py").read_text()
+    edited = (tmp_path / "sp.py").read_text(encoding="utf-8")
+    assert f"{sp['name']} = {float(sp['value'])!r}" in edited
     # the edited model is still the same feature tree
     ex = run("extract", str(tmp_path / "sp.py"), "--out", str(tmp_path / "f.json"))
     assert ex["count"] == exp["feature_count"]
@@ -113,11 +114,12 @@ def test_execute_ir_is_deterministic(tmp_path):
         str(tmp_path / "a.py"))
     run("execute-ir", str(ir), "--out", str(tmp_path / "b.step"), "--native-out",
         str(tmp_path / "b.py"))
-    assert (tmp_path / "a.py").read_text() == (tmp_path / "b.py").read_text()
+    assert (tmp_path / "a.py").read_bytes() == (tmp_path / "b.py").read_bytes()
 
 
 def test_execute_ir_rejects_invalid_ir(tmp_path):
-    ir = json.loads((CASES_DIR / "C02_through_hole" / "re_plan.v1.json").read_text())
+    ir_path = CASES_DIR / "C02_through_hole" / "re_plan.v1.json"
+    ir = json.loads(ir_path.read_text(encoding="utf-8"))
     ir["features"][1]["params"]["diameter"] = {"ref": "undeclared"}
     p = tmp_path / "re_plan.v1.json"
     p.write_text(json.dumps(ir))
@@ -126,12 +128,86 @@ def test_execute_ir_rejects_invalid_ir(tmp_path):
     assert not (tmp_path / "x.step").exists()
 
 
+def _write_ir(tmp_path: Path, ir: dict) -> Path:
+    p = tmp_path / "re_plan.v1.json"
+    p.write_text(json.dumps(ir))
+    return p
+
+
+def test_execute_ir_sketch_ref_drives_set_param(tmp_path):
+    """spec 0.3.0: a sketch number bound with {"ref"} is a driving parameter (S5)."""
+    ir = json.loads((CASES_DIR / "C04_revolve_groove" / "re_plan.v1.json").read_text())
+    rect = ir["features"][0]["sketch"]
+    rect["entities"][0]["height"] = {"ref": "shaft_len"}
+    rect["constraints"] = [c for c in rect["constraints"] if "shaft_len" not in c]
+    exp = expected("C04_revolve_groove")
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "a.step"),
+              "--native-out", str(tmp_path / "a.py"))
+    assert close(res["volume_mm3"], exp["volume_mm3"], exp["tolerance_rel"]), res
+    assert "Rectangle(10, shaft_len" in (tmp_path / "a.py").read_text()
+    sp = run("set-param", str(tmp_path / "a.py"), "shaft_len", "70", "--out",
+             str(tmp_path / "b.step"))
+    # the rect keeps its centre (y 30) and grows to 70: the groove stays inside, so the
+    # volume equals the conformance value for shaft_len 70
+    assert close(sp["volume_after_mm3"], exp["set_param"]["volume_mm3"], exp["tolerance_rel"])
+
+
+def _hole_angles(step: Path, radius: float) -> list[float]:
+    import math
+
+    from build123d import import_step
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+
+    out = set()
+    for f in import_step(str(step)).faces():
+        s = BRepAdaptor_Surface(f.wrapped)
+        if s.GetType() == GeomAbs_Cylinder and abs(s.Cylinder().Radius() - radius) < 1e-6:
+            o = s.Cylinder().Axis().Location()
+            out.add(round(math.degrees(math.atan2(o.Y(), o.X())), 3) % 360)
+    return sorted(out)
+
+
+@pytest.mark.parametrize(
+    "params,angles",
+    [
+        ({"count": 6, "angle_deg": 360}, [0, 60, 120, 180, 240, 300]),
+        ({"count": 3, "angle_deg": 180}, [0, 60, 120]),  # total sweep: step 60, not 90
+        ({"count": 3, "pitch_deg": 90}, [0, 90, 180]),
+        ({"count": 3, "pitch_deg": -90}, [0, 180, 270]),
+    ],
+)
+def test_execute_ir_circular_pattern_semantics(tmp_path, params, angles):
+    """ADR 0004: instance k at k * (angle_deg / count) or k * pitch_deg about the axis."""
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    ir["features"][2]["params"] = {"features": ["F2"], "axis": "D2", **params}
+    run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "p.step"))
+    assert _hole_angles(tmp_path / "p.step", 3.0) == pytest.approx(angles)
+
+
+def test_execute_ir_rejects_old_spec_and_bad_refs(tmp_path):
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    old = dict(ir, spec_version="0.2.0")
+    res = run("execute-ir", str(_write_ir(tmp_path, old)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "recadbench-spec migrate" in res["error"]
+    ir["features"][0]["sketch"]["entities"][0]["radius"] = {"ref": "nope"}
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "undeclared parameter 'nope'" in res["error"]
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    ir["features"][2]["params"]["pitch_deg"] = 60
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "at most one" in res["error"]
+
+
 def _extract(tmp_path: Path, code: str, expect_ok: bool = True) -> dict:
     src = tmp_path / "model.py"
     src.write_text(textwrap.dedent(code))
     out = tmp_path / "features.json"
     run("extract", str(src), "--out", str(out), expect_ok=expect_ok)
-    return json.loads(out.read_text())
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def test_ocp_direct_script_is_unmapped(tmp_path):
@@ -284,7 +360,7 @@ def test_modifier_or_mirror_on_untraced_body_is_unmapped(tmp_path, body, op):
     (tmp_path / "model.py").write_text(f"PICKLED = {pickled!r}\n" + code)
     out = tmp_path / "features.json"
     run("extract", str(tmp_path / "model.py"), "--out", str(out))
-    doc = json.loads(out.read_text())
+    doc = json.loads(out.read_text(encoding="utf-8"))
     assert any("not the result of traced" in u for u in doc["unmapped"]), doc
 
 
