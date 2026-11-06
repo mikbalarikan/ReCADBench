@@ -305,3 +305,15 @@ def test_real_build123d_replay_through_dispatcher(tmp_path, capsys, monkeypatch)
     rc, res = recad(capsys, "build123d", "replay", "C01_block", "--out-dir", str(tmp_path))
     assert rc == 0 and res["features_valid"] is True and res["count"] == 1
     assert res["volume_mm3"] == pytest.approx(24000.0, rel=1e-6)
+
+
+@pytest.mark.parametrize("argv", [[], ["--help"], ["build123d"], ["nope"]])
+def test_console_output_is_ascii(argv):
+    # review PR #8: `recad --help` crashed on a non-UTF-8 console (U+2026 in USAGE); console
+    # output must be ASCII on Windows (#7 convention)
+    env = dict(os.environ, PYTHONIOENCODING="cp437")
+    proc = subprocess.run([sys.executable, "-m", "recad_cli", *argv], capture_output=True,
+                          env=env, timeout=120)
+    assert b"Traceback" not in proc.stderr, proc.stderr
+    assert (proc.stdout + proc.stderr).isascii()
+    assert proc.returncode in (0, 2)
