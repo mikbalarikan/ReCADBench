@@ -44,7 +44,7 @@ def run(*args: str, expect_ok: bool = True) -> dict:
 
 
 def expected(case: str) -> dict:
-    return json.loads((CASES_DIR / case / "expected.json").read_text())
+    return json.loads((CASES_DIR / case / "expected.json").read_text(encoding="utf-8"))
 
 
 def close(v: float, ref: float, rel: float) -> bool:
@@ -89,7 +89,7 @@ def test_cases_present():
 def test_adapter_is_stdlib_only():
     import ast
 
-    tree = ast.parse(ADAPTER.read_text())
+    tree = ast.parse(ADAPTER.read_text(encoding="utf-8"))
     mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import)
             for a in n.names}
     mods |= {n.module.split(".")[0] for n in ast.walk(tree)
@@ -114,7 +114,7 @@ def test_replay_matches_expected(case, replays):
         solids, vol, _faces = m
         assert solids == 1
         assert close(vol, exp["volume_mm3"], exp["tolerance_rel"]), (vol, exp)
-    doc = json.loads((out / "features.json").read_text())
+    doc = json.loads((out / "features.json").read_text(encoding="utf-8"))
     assert doc["tool"] == "solidcraft" and doc["count"] == exp["feature_count"]
     assert sum(f["counted"] for f in doc["features"]) == doc["count"]
     assert {p["name"] for p in doc["parameters"]} >= {exp["set_param"]["name"]}
@@ -134,7 +134,7 @@ def test_replay_set_param_round_trip(case, replays, tmp_path):
     if m is not None:
         assert m[0] == 1 and close(m[1], sp["volume_mm3"], exp["tolerance_rel"]), m
     # the edited native script carries the new value and is still the same feature tree
-    edited = json.loads((tmp_path / "sp.json").read_text())
+    edited = json.loads((tmp_path / "sp.json").read_text(encoding="utf-8"))
     defs = [c["params"] for c in edited["commands"] if c["command"] == "parameters.add"
             and c["params"]["name"] == sp["name"]]
     assert defs and defs[0]["expression"].startswith(repr(float(sp["value"])))
@@ -146,7 +146,7 @@ def _extract(tmp_path: Path, commands: list, expect_ok: bool = True) -> dict:
     src = write_script(tmp_path / "model.json", commands)
     out = tmp_path / "features.json"
     run("extract", str(src), "--out", str(out), expect_ok=expect_ok)
-    doc = json.loads(out.read_text())
+    doc = json.loads(out.read_text(encoding="utf-8"))
     validate_features(out)
     return doc
 
@@ -227,7 +227,7 @@ def test_usage_error_is_one_json_exit_1(argv):
 
 def test_added_fillet_counts_one_more(tmp_path):
     """The count is read from the rebuilt timeline: one more fillet command -> count + 1."""
-    script = json.loads((REPLAYS / "C10_draft_pocket.json").read_text())
+    script = json.loads((REPLAYS / "C10_draft_pocket.json").read_text(encoding="utf-8"))
     for c in script["commands"]:
         c.pop("ir", None)  # replay annotations play no part in counting
     base = write_script(tmp_path / "base.json", script["commands"])
@@ -260,7 +260,7 @@ def test_set_param_on_sketch_dimension_parameter(tmp_path):
               "--native-out", str(tmp_path / "d2.json"))
     assert close(res["volume_before_mm3"], 12000.0, 1e-6)
     assert close(res["volume_after_mm3"], 15000.0, 1e-6), res
-    last = json.loads((tmp_path / "d2.json").read_text())["commands"][-1]
+    last = json.loads((tmp_path / "d2.json").read_text(encoding="utf-8"))["commands"][-1]
     assert last["command"] == "parameters.change" and last["params"]["name"] == "width"
 
 
@@ -298,7 +298,7 @@ def test_c10_draft_walls_survive_pocket_depth_change(tmp_path, depth, volume):
 
 def test_c09_replay_mirrors_features_like_the_ir(tmp_path):
     """C09 mirrors the seed features [F1, F2]; the single-tool join is part of the mirror."""
-    cmds = json.loads((REPLAYS / "C09_mirror_bracket.json").read_text())["commands"]
+    cmds = json.loads((REPLAYS / "C09_mirror_bracket.json").read_text(encoding="utf-8"))["commands"]
     mirror = [c["params"] for c in cmds if c["command"] == "solid.mirror"]
     assert mirror == [{"features": ["Extrude1", "Hole1"], "plane": "YZ"}]
     doc = _extract(tmp_path, cmds)
@@ -309,6 +309,6 @@ def test_c09_replay_mirrors_features_like_the_ir(tmp_path):
 
 
 def test_install_conformance_loop_covers_only_case_dirs():
-    text = (HERE.parent / "install.md").read_text()
+    text = (HERE.parent / "install.md").read_text(encoding="utf-8")
     assert "ls backends/conformance/ir_cases)" not in text
     assert "ir_cases/C*/" in text

@@ -8,7 +8,7 @@ Agents never call the adapters; the worker and evaluator hosts call them through
 | Folder | Upstream | Agent interface | Adapter interpreter | State |
 |---|---|---|---|---|
 | [`build123d/`](build123d/README.md) | build123d 0.13.0 + pzfreo/build123d-mcp 0.3.91 | MCP | build123d env Python | conformance 10/10 (reference backend) |
-| [`freecad/`](freecad/README.md) | FreeCAD 26.3 + freecad-robust-mcp 0.6.1 ([ADR 0003](../docs/adr/0003-freecad-mcp-selection.md)) | MCP | FreeCAD's Python | conformance 10/10 |
+| [`freecad/`](freecad/README.md) | FreeCAD weekly-2026.09.16 dev build (reports 26.3.0) + freecad-robust-mcp 0.6.1 ([ADR 0003](../docs/adr/0003-freecad-mcp-selection.md)) | MCP | FreeCAD's Python | conformance 10/10 |
 | [`solidcraft/`](solidcraft/README.md) | tangency-labs/solidcraft 0.30.1 (`solidcraft-cli mcp`) | MCP | any Python ≥ 3.11 + the CLI | conformance 10/10 |
 | [`nx/`](nx/README.md) | Siemens NX (`recadbench nx-run`) | CLI | — | P4, no adapter yet |
 | [`conformance/`](conformance/README.md) | 10 synthetic IR cases + `run_conformance.py` | — | — | results: [CONFORMANCE.md](conformance/CONFORMANCE.md) |

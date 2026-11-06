@@ -4,7 +4,10 @@
 # desktop app when one exists, which would break run isolation and max_parallel. The runner adds
 # `--allow-path <run_dir>/cad` so the agent can save/export inside its run dir (docs/mcp.md).
 # Install: install.md (built from source with cargo at tag v0.30.1; release installers also ship
-# solidcraft-cli). Termux ARM64: unverified, see install.md "Termux test" (not listed in hosts).
+# solidcraft-cli). Windows: release asset solidcraft-0.30.1-windows-x64-portable.zip (sha256
+# 14392c9d96f21a6bcd606d565bd676703be46c01fccf8956da2e8a89ab1f1d21, matches the release
+# SHA256SUMS.txt; solidcraft-cli.exe sha256 abc39aed92a18ea540bf12ea17552cd974f63313208a0ad1d4468062ae3a6a88).
+# Termux ARM64: unverified, see install.md "Termux test" (not listed in hosts).
 id: solidcraft
 software:
   name: solidcraft-cli
@@ -56,8 +59,11 @@ denied_tools:
   reason: opens a mesh file (the scan)
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+# Hosts: linux (source build, rustc 1.97.0) and windows (release portable zip, Windows 11 x64), both
+# 2026-11-06: 10/10, identical counts and volume errors. MCP tools/list snapshot: mcp_tools.json
+# (21 tools, `mcp --headless`).
 conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: solidcraft-cli 0.30.1 (source build, rustc 1.97.0, Linux x86_64)
+  software_version: solidcraft-cli 0.30.1; hosts linux x86_64 (source build) + windows x64 (release portable zip)

@@ -1,0 +1,379 @@
+{
+  "backend": "freecad",
+  "pin": "freecad-robust-mcp 0.6.1",
+  "command": [
+    "freecad-mcp.exe"
+  ],
+  "server": {
+    "name": "freecad-mcp",
+    "version": "1.30.0"
+  },
+  "tools": [
+    {
+      "name": "activate_workbench",
+      "read_only_hint": null
+    },
+    {
+      "name": "add_sketch_arc",
+      "read_only_hint": null
+    },
+    {
+      "name": "add_sketch_circle",
+      "read_only_hint": null
+    },
+    {
+      "name": "add_sketch_line",
+      "read_only_hint": null
+    },
+    {
+      "name": "add_sketch_point",
+      "read_only_hint": null
+    },
+    {
+      "name": "add_sketch_rectangle",
+      "read_only_hint": null
+    },
+    {
+      "name": "boolean_operation",
+      "read_only_hint": null
+    },
+    {
+      "name": "chamfer_edges",
+      "read_only_hint": null
+    },
+    {
+      "name": "clear_selection",
+      "read_only_hint": null
+    },
+    {
+      "name": "close_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "copy_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_box",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_cone",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_cylinder",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_helix",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_hole",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_macro",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_macro_from_template",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_partdesign_body",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_sphere",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_torus",
+      "read_only_hint": null
+    },
+    {
+      "name": "create_wedge",
+      "read_only_hint": null
+    },
+    {
+      "name": "delete_macro",
+      "read_only_hint": null
+    },
+    {
+      "name": "delete_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "edit_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "execute_python",
+      "read_only_hint": null
+    },
+    {
+      "name": "export_3mf",
+      "read_only_hint": null
+    },
+    {
+      "name": "export_iges",
+      "read_only_hint": null
+    },
+    {
+      "name": "export_obj",
+      "read_only_hint": null
+    },
+    {
+      "name": "export_step",
+      "read_only_hint": null
+    },
+    {
+      "name": "export_stl",
+      "read_only_hint": null
+    },
+    {
+      "name": "fillet_edges",
+      "read_only_hint": null
+    },
+    {
+      "name": "fit_all",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_active_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_connection_status",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_console_log",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_console_output",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_freecad_version",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_mcp_server_environment",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_screenshot",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_selection",
+      "read_only_hint": null
+    },
+    {
+      "name": "get_undo_redo_status",
+      "read_only_hint": null
+    },
+    {
+      "name": "groove_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "import_step",
+      "read_only_hint": null
+    },
+    {
+      "name": "import_stl",
+      "read_only_hint": null
+    },
+    {
+      "name": "insert_part_from_library",
+      "read_only_hint": null
+    },
+    {
+      "name": "inspect_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "linear_pattern",
+      "read_only_hint": null
+    },
+    {
+      "name": "list_documents",
+      "read_only_hint": null
+    },
+    {
+      "name": "list_macros",
+      "read_only_hint": null
+    },
+    {
+      "name": "list_objects",
+      "read_only_hint": null
+    },
+    {
+      "name": "list_parts_library",
+      "read_only_hint": null
+    },
+    {
+      "name": "list_workbenches",
+      "read_only_hint": null
+    },
+    {
+      "name": "loft_sketches",
+      "read_only_hint": null
+    },
+    {
+      "name": "mirror_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "mirrored_feature",
+      "read_only_hint": null
+    },
+    {
+      "name": "open_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "pad_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "pocket_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "polar_pattern",
+      "read_only_hint": null
+    },
+    {
+      "name": "read_macro",
+      "read_only_hint": null
+    },
+    {
+      "name": "recompute",
+      "read_only_hint": null
+    },
+    {
+      "name": "recompute_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "redo",
+      "read_only_hint": null
+    },
+    {
+      "name": "revolution_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "rotate_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "run_macro",
+      "read_only_hint": null
+    },
+    {
+      "name": "save_document",
+      "read_only_hint": null
+    },
+    {
+      "name": "scale_object",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_camera_position",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_display_mode",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_object_color",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_object_visibility",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_placement",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_selection",
+      "read_only_hint": null
+    },
+    {
+      "name": "set_view_angle",
+      "read_only_hint": null
+    },
+    {
+      "name": "sweep_sketch",
+      "read_only_hint": null
+    },
+    {
+      "name": "undo",
+      "read_only_hint": null
+    },
+    {
+      "name": "zoom_in",
+      "read_only_hint": null
+    },
+    {
+      "name": "zoom_out",
+      "read_only_hint": null
+    }
+  ],
+  "not_mutating": {
+    "clear_selection": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "export_3mf": "writes an export file only; the document is unchanged",
+    "export_iges": "writes an export file only; the document is unchanged",
+    "export_obj": "writes an export file only; the document is unchanged",
+    "export_step": "writes an export file only; the document is unchanged",
+    "export_stl": "writes an export file only; the document is unchanged",
+    "fit_all": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "get_active_document": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_connection_status": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_console_log": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_console_output": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_freecad_version": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_mcp_server_environment": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_screenshot": "renders an image; needs the GUI (fails headless)",
+    "get_selection": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "get_undo_redo_status": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "inspect_object": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "list_documents": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "list_macros": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "list_objects": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "list_parts_library": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "list_workbenches": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "read_macro": "read-only query (no readOnlyHint annotation in 0.6.1)",
+    "set_camera_position": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "set_display_mode": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "set_object_color": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "set_object_visibility": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "set_selection": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "set_view_angle": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "zoom_in": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd",
+    "zoom_out": "view/GUI state only (ViewObject, camera, selection); no-op in headless freecadcmd"
+  },
+  "conditional": {}
+}

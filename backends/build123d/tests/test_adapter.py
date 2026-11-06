@@ -34,7 +34,7 @@ def run(*args: str, expect_ok: bool = True) -> dict:
 
 
 def expected(case: str) -> dict:
-    return json.loads((CASES_DIR / case / "expected.json").read_text())
+    return json.loads((CASES_DIR / case / "expected.json").read_text(encoding="utf-8"))
 
 
 def close(v: float, ref: float, rel: float) -> bool:
@@ -68,7 +68,7 @@ def test_replay_matches_expected(case, replays):
     assert res["unmapped"] == []
     for name in ("native.py", "output.step", "features.json"):
         assert (out / name).is_file()
-    doc = json.loads((out / "features.json").read_text())
+    doc = json.loads((out / "features.json").read_text(encoding="utf-8"))
     assert doc["tool"] == "build123d" and doc["count"] == exp["feature_count"]
     assert sum(f["counted"] for f in doc["features"]) == doc["count"]
     validate_features(out / "features.json")
@@ -84,7 +84,8 @@ def test_replay_set_param_round_trip(case, replays, tmp_path):
     assert close(res["volume_before_mm3"], exp["volume_mm3"], exp["tolerance_rel"])
     assert close(res["volume_after_mm3"], sp["volume_mm3"], exp["tolerance_rel"]), res
     assert (tmp_path / "sp.step").is_file()
-    assert f"{sp['name']} = {float(sp['value'])!r}" in (tmp_path / "sp.py").read_text()
+    edited = (tmp_path / "sp.py").read_text(encoding="utf-8")
+    assert f"{sp['name']} = {float(sp['value'])!r}" in edited
     # the edited model is still the same feature tree
     ex = run("extract", str(tmp_path / "sp.py"), "--out", str(tmp_path / "f.json"))
     assert ex["count"] == exp["feature_count"]
@@ -113,11 +114,12 @@ def test_execute_ir_is_deterministic(tmp_path):
         str(tmp_path / "a.py"))
     run("execute-ir", str(ir), "--out", str(tmp_path / "b.step"), "--native-out",
         str(tmp_path / "b.py"))
-    assert (tmp_path / "a.py").read_text() == (tmp_path / "b.py").read_text()
+    assert (tmp_path / "a.py").read_bytes() == (tmp_path / "b.py").read_bytes()
 
 
 def test_execute_ir_rejects_invalid_ir(tmp_path):
-    ir = json.loads((CASES_DIR / "C02_through_hole" / "re_plan.v1.json").read_text())
+    ir_path = CASES_DIR / "C02_through_hole" / "re_plan.v1.json"
+    ir = json.loads(ir_path.read_text(encoding="utf-8"))
     ir["features"][1]["params"]["diameter"] = {"ref": "undeclared"}
     p = tmp_path / "re_plan.v1.json"
     p.write_text(json.dumps(ir))
@@ -205,7 +207,7 @@ def _extract(tmp_path: Path, code: str, expect_ok: bool = True) -> dict:
     src.write_text(textwrap.dedent(code))
     out = tmp_path / "features.json"
     run("extract", str(src), "--out", str(out), expect_ok=expect_ok)
-    return json.loads(out.read_text())
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def test_ocp_direct_script_is_unmapped(tmp_path):
@@ -358,7 +360,7 @@ def test_modifier_or_mirror_on_untraced_body_is_unmapped(tmp_path, body, op):
     (tmp_path / "model.py").write_text(f"PICKLED = {pickled!r}\n" + code)
     out = tmp_path / "features.json"
     run("extract", str(tmp_path / "model.py"), "--out", str(out))
-    doc = json.loads(out.read_text())
+    doc = json.loads(out.read_text(encoding="utf-8"))
     assert any("not the result of traced" in u for u in doc["unmapped"]), doc
 
 
