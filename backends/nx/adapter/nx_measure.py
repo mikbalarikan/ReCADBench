@@ -14,11 +14,10 @@ import os
 import re
 import time
 
+import nx_taxonomy
 import NXOpen
 import NXOpen.Features
 import NXOpen.GeometricUtilities
-
-import nx_taxonomy
 
 S = NXOpen.Session.GetSession()
 TEMPLATE = "model-plain-1-mm-template.prt"
