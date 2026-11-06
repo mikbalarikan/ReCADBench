@@ -23,6 +23,7 @@ S = NXOpen.Session.GetSession()
 TEMPLATE = "model-plain-1-mm-template.prt"
 
 # Expression names NX writes itself (p12, p12_x, Pattern_..., ASSO_BLEND_3, Sheet_Metal_...).
+# Only a fallback: an expression with IsUserSpecified is a user parameter whatever its name.
 SYSTEM_EXPR_NAME = re.compile(
     r"^(p\d+(_\w+)?|Pattern_.*|ASSO_BLEND_\d+|Sheet_Metal_\w+|SM_Validation_\w+)$"
 )
@@ -133,9 +134,45 @@ def volume(part, bodies):
         mb.Dispose()
 
 
+def imported_facet_bodies(part):
+    """Facet bodies that are not the display facets of a body of the part (measured on NX 2206).
+
+    NX keeps one FacetedBody per solid/sheet for display, with `AssociatedBody` = that body. An
+    STL imported as a JT-type facet body (or any other mesh object) has no associated body and
+    no feature row, so the feature tree alone does not see it: it is reported as unmapped."""
+    tags = {b.Tag for b in part.Bodies}
+    out = []
+    try:
+        fbs = list(part.FacetedBodies)
+    except Exception:  # noqa: BLE001
+        return out
+    for fb in fbs:
+        try:
+            assoc = fb.AssociatedBody
+        except Exception:  # noqa: BLE001
+            assoc = None
+        if assoc is not None and getattr(assoc, "Tag", None) in tags:
+            continue
+        try:
+            jid = fb.JournalIdentifier
+        except Exception:  # noqa: BLE001
+            jid = str(fb.Tag)
+        out.append(jid)
+    return out
+
+
+def facet_unmapped(part):
+    return [
+        f"facet body {jid}: imported mesh (facet body without a parametric body), not a design "
+        "feature"
+        for jid in imported_facet_bodies(part)
+    ]
+
+
 def bodies_summary(part):
     sol = solids(part)
     out = {"bodies": len(sol), "sheets": len(sheets(part)), "volume": round(volume(part, sol), 6)}
+    out["facet_bodies"] = len(imported_facet_bodies(part))
     if len(sol) == 1:
         out["faces"] = len(sol[0].GetFaces())
     return out
@@ -192,8 +229,23 @@ def _suppressed(f):
         return False
 
 
+def is_user_expression(e):
+    """True for an expression a person / journal created (Expressions.CreateWithUnits ...).
+
+    NX 2206 sets `Expression.IsUserSpecified` for exactly those (measured: also after save and
+    reopen), so a user name that looks like an NX name (`p1_width`, `Pattern_pitch`) is kept. The
+    name test stays as a fallback for names that do not look like NX's own (for example a
+    feature expression renamed by the author)."""
+    try:
+        if bool(e.IsUserSpecified):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return not SYSTEM_EXPR_NAME.match(e.Name)
+
+
 def user_expressions(part):
-    return [e for e in part.Expressions if not SYSTEM_EXPR_NAME.match(e.Name)]
+    return [e for e in part.Expressions if is_user_expression(e)]
 
 
 def _feature_exprs(f):
@@ -275,6 +327,7 @@ def extract(part, native_path):
     """features.json content (without native_sha256, which the host adds)."""
     tree = nx_taxonomy.build(rows(part))
     tree["unmapped"].extend(components(part))
+    tree["unmapped"].extend(facet_unmapped(part))
     doc = {
         "tool": "nx",
         "native_file": os.path.abspath(native_path),
@@ -290,6 +343,7 @@ def extract(part, native_path):
         doc["face_count"] = summ["faces"]
     doc["bodies"] = summ["bodies"]
     doc["sheets"] = summ["sheets"]
+    doc["facet_bodies"] = summ["facet_bodies"]
     return doc
 
 

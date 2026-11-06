@@ -273,3 +273,91 @@ def test_adapter_replay_extract_set_param(tmp_path):
     res = json.loads(proc.stdout.strip().splitlines()[-1])
     assert res["ok"] and abs(res["volume_after_mm3"] - 21738.0533) < 1e-3, res
     assert (out / "native.prt").read_bytes() == before  # the input is never written
+
+
+BOOL3 = '''
+import _nxr as X
+
+part = X.work()
+d = X.Datums(part)
+
+
+def box(cx, w, h0, h1, op=None, target=None):
+    sk = X.new_sketch(part, d.xy, d.x, d.origin)
+    ls = X.rect_centered(part, sk, X.point(part, cx, 0, 0), w, 10, u0=cx)
+    X.finish(sk)
+    return X.extrude(part, X.section(part, ls), (0, 0, 1), h0, h1, op, target)
+
+
+a = box(0, 20, 0, 10)
+b = box(15, 20, 0, 10)
+bb = b.GetBodies()[0]
+box(15, 4, 10, 15, X.BOOL.Unite, bb)
+xx = box(30, 20, 0, 10)
+X.unite(part, a.GetBodies()[0], [bb])
+X.unite(part, a.GetBodies()[0], [xx.GetBodies()[0]])
+'''
+
+
+@needs_nx
+def test_union_with_unrelated_earlier_body_matches_build123d(tmp_path):
+    """A (1 extrude) + B (extrude + boss united into B), unrelated X (1 extrude); unite A+B, then
+    +X. Both unites have a single-feature operand -> count 4, like the build123d twin
+    (a = Box; b = Box + Box; x = Box; a + b + x). Analytic volume 5200 mm3."""
+    (tmp_path / "cad").mkdir()
+    (tmp_path / "cad" / "_nxr.py").write_bytes((NX / "replays" / "_nxr.py").read_bytes())
+    j = journal(tmp_path, "bool3.py", BOOL3)
+    rc, res = nx_run_cli(tmp_path, j)
+    assert rc == 0 and res["ok"], res
+    assert abs(res["volume"] - 5200.0) < 1e-6 and res["bodies"] == 1
+    assert res["count"] == 4 and res["unmapped"] == [], res
+
+
+@needs_nx
+@pytest.mark.parametrize("kind", ["Jt", "Psm"])
+def test_imported_stl_facet_body_is_unmapped(tmp_path, kind):
+    """An STL imported into the part is never a clean model. Psm makes a convergent body (a BREP
+    feature row); Jt makes a facet body with no feature row and no solid, which the counter must
+    still see (part.FacetedBodies without an associated body)."""
+    bd = pytest.importorskip("build123d")
+    stl = tmp_path / "cube.stl"
+    bd.export_stl(bd.Box(10, 10, 10), str(stl))
+    j = journal(
+        tmp_path,
+        f"imp_{kind}.py",
+        BLOCK
+        + f"""
+import NXOpen.Facet
+B = NXOpen.Facet.STLImportBuilder
+b2 = part.FacetedBodies.CreateSTLImportBuilder()
+b2.File = {stl.as_posix()!r}
+b2.STLFileUnits = B.STLFileUnitsTypes.Millimeters
+b2.FacetBodyType = B.FacetBodyTypes.{kind}
+b2.ShowInformationWindow = False
+b2.Commit(); b2.Destroy()
+""",
+    )
+    rc, res = nx_run_cli(tmp_path, j)
+    last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
+    assert last["ok"] and last["saved"], last
+    assert last["count"] == 1 and last["unmapped"], last
+    if kind == "Jt":
+        assert last["facet_bodies"] == 1 and last["bodies"] == 1, last
+        assert any("imported mesh" in u for u in last["unmapped"]), last
+
+
+@needs_nx
+def test_user_expressions_named_like_nx_names_are_parameters(tmp_path):
+    """IR parameter names may look like NX's own (p1_width, Pattern_pitch): they are user
+    expressions (IsUserSpecified) and must be listed in parameters[]; NX's p<N> are not."""
+    body = BLOCK.replace('"height=20"', '"p1_width=20"').replace('= "height"', '= "p1_width"')
+    body += """
+part.Expressions.CreateWithUnits("Pattern_pitch=15", part.UnitCollection.FindObject("MilliMeter"))
+"""
+    j = journal(tmp_path, "names.py", body)
+    rc, res = nx_run_cli(tmp_path, j)
+    last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
+    assert last["ok"] and abs(last["volume"] - 24000.0) < 1e-6, last
+    names = {p["name"]: p for p in last["parameters"]}
+    assert set(names) == {"p1_width", "Pattern_pitch"}, names
+    assert names["p1_width"]["value"] == 20.0 and "Extrude" in names["p1_width"]["feature"]
