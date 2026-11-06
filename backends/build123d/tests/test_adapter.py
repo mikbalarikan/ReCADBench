@@ -126,6 +126,80 @@ def test_execute_ir_rejects_invalid_ir(tmp_path):
     assert not (tmp_path / "x.step").exists()
 
 
+def _write_ir(tmp_path: Path, ir: dict) -> Path:
+    p = tmp_path / "re_plan.v1.json"
+    p.write_text(json.dumps(ir))
+    return p
+
+
+def test_execute_ir_sketch_ref_drives_set_param(tmp_path):
+    """spec 0.3.0: a sketch number bound with {"ref"} is a driving parameter (S5)."""
+    ir = json.loads((CASES_DIR / "C04_revolve_groove" / "re_plan.v1.json").read_text())
+    rect = ir["features"][0]["sketch"]
+    rect["entities"][0]["height"] = {"ref": "shaft_len"}
+    rect["constraints"] = [c for c in rect["constraints"] if "shaft_len" not in c]
+    exp = expected("C04_revolve_groove")
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "a.step"),
+              "--native-out", str(tmp_path / "a.py"))
+    assert close(res["volume_mm3"], exp["volume_mm3"], exp["tolerance_rel"]), res
+    assert "Rectangle(10, shaft_len" in (tmp_path / "a.py").read_text()
+    sp = run("set-param", str(tmp_path / "a.py"), "shaft_len", "70", "--out",
+             str(tmp_path / "b.step"))
+    # the rect keeps its centre (y 30) and grows to 70: the groove stays inside, so the
+    # volume equals the conformance value for shaft_len 70
+    assert close(sp["volume_after_mm3"], exp["set_param"]["volume_mm3"], exp["tolerance_rel"])
+
+
+def _hole_angles(step: Path, radius: float) -> list[float]:
+    import math
+
+    from build123d import import_step
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+
+    out = set()
+    for f in import_step(str(step)).faces():
+        s = BRepAdaptor_Surface(f.wrapped)
+        if s.GetType() == GeomAbs_Cylinder and abs(s.Cylinder().Radius() - radius) < 1e-6:
+            o = s.Cylinder().Axis().Location()
+            out.add(round(math.degrees(math.atan2(o.Y(), o.X())), 3) % 360)
+    return sorted(out)
+
+
+@pytest.mark.parametrize(
+    "params,angles",
+    [
+        ({"count": 6, "angle_deg": 360}, [0, 60, 120, 180, 240, 300]),
+        ({"count": 3, "angle_deg": 180}, [0, 60, 120]),  # total sweep: step 60, not 90
+        ({"count": 3, "pitch_deg": 90}, [0, 90, 180]),
+        ({"count": 3, "pitch_deg": -90}, [0, 180, 270]),
+    ],
+)
+def test_execute_ir_circular_pattern_semantics(tmp_path, params, angles):
+    """ADR 0004: instance k at k * (angle_deg / count) or k * pitch_deg about the axis."""
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    ir["features"][2]["params"] = {"features": ["F2"], "axis": "D2", **params}
+    run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "p.step"))
+    assert _hole_angles(tmp_path / "p.step", 3.0) == pytest.approx(angles)
+
+
+def test_execute_ir_rejects_old_spec_and_bad_refs(tmp_path):
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    old = dict(ir, spec_version="0.2.0")
+    res = run("execute-ir", str(_write_ir(tmp_path, old)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "recadbench-spec migrate" in res["error"]
+    ir["features"][0]["sketch"]["entities"][0]["radius"] = {"ref": "nope"}
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "undeclared parameter 'nope'" in res["error"]
+    ir = json.loads((CASES_DIR / "C06_circ_pattern" / "re_plan.v1.json").read_text())
+    ir["features"][2]["params"]["pitch_deg"] = 60
+    res = run("execute-ir", str(_write_ir(tmp_path, ir)), "--out", str(tmp_path / "x.step"),
+              expect_ok=False)
+    assert "at most one" in res["error"]
+
+
 def _extract(tmp_path: Path, code: str, expect_ok: bool = True) -> dict:
     src = tmp_path / "model.py"
     src.write_text(textwrap.dedent(code))

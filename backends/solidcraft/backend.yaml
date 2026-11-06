@@ -40,6 +40,20 @@ adapter_cli:
   extract: recad solidcraft extract
   set_param: recad solidcraft set-param
   replay: recad solidcraft replay
+# ADR 0004: commands gate_hook denies because they import or analyse the scan inside SolidCraft
+# (RE analysis goes through retk). Scan import is a command inside an execute/batch script, so
+# the entries match the JSON arguments (args_regex); the adapter's extract also reports these
+# commands as unmapped (IMPORT_COMMANDS / IMPORT_PREFIXES).
+denied_tools:
+- tool: mcp__solidcraft__execute
+  args_regex: '(file\.insert_mesh|pointcloud\.|sketch\.fit_curves_to_section)'
+  reason: inserts a mesh / point cloud (the scan) or fits sketch curves to a mesh section
+- tool: mcp__solidcraft__batch
+  args_regex: '(file\.insert_mesh|pointcloud\.|sketch\.fit_curves_to_section)'
+  reason: inserts a mesh / point cloud (the scan) or fits sketch curves to a mesh section
+- tool: mcp__solidcraft__open
+  args_regex: '(?i)\.(stl|ply|obj|3mf)\b'
+  reason: opens a mesh file (the scan)
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
 conformance:

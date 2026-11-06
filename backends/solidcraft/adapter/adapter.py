@@ -50,7 +50,7 @@ TIMEOUT_S = 600
 VOLUME_METHOD = "solidcraft-cli eval of the re-imported STEP (numeric; <=2e-4 rel observed)"
 
 # ---------------------------------------------------------------------------------------------
-# taxonomy mapping (spec/recadbench_spec/feature_taxonomy.yaml, spec 0.2.0)
+# taxonomy mapping (spec/recadbench_spec/feature_taxonomy.yaml, spec 0.3.0; type names unchanged since 0.1.0)
 # ---------------------------------------------------------------------------------------------
 
 COUNTED = {

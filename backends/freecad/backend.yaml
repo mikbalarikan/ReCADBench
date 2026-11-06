@@ -75,6 +75,20 @@ adapter_cli:
   extract: recad freecad extract
   set_param: recad freecad set-param
   replay: recad freecad replay
+# ADR 0004: tools gate_hook denies because they import or analyse the scan inside FreeCAD (RE
+# analysis goes through retk). `tool` = tool-name prefix; with args_regex only calls whose JSON
+# arguments match are denied. Not covered: run_macro (only the macro name is visible) --
+# extract still reports Mesh::/Points:: objects as unmapped. Re-check against the
+# freecad-robust-mcp 0.6.1 tools/list on every pin bump (H1).
+denied_tools:
+- tool: mcp__freecad__import_stl
+  reason: imports a mesh (the scan) into the document
+- tool: mcp__freecad__open_document
+  args_regex: '(?i)\.(stl|ply|obj|3mf)\b'
+  reason: opens a mesh file (the scan) as a document
+- tool: mcp__freecad__execute_python
+  args_regex: '(?i)\.(stl|ply|obj|3mf|ast)\b|\b(Mesh|MeshPart|Points|ReverseEngineering)\b'
+  reason: Python that loads or analyses a mesh / point cloud (Mesh, MeshPart, Points, ReverseEngineering workbenches)
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
 conformance:

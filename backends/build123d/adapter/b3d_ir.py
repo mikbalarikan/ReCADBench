@@ -1,4 +1,4 @@
-"""Deterministic RE Plan IR (spec 0.2.0) -> build123d script (`recad build123d execute-ir`).
+"""Deterministic RE Plan IR (spec 0.3.0) -> build123d script (`recad build123d execute-ir`).
 
 Pure stdlib: this module only *writes* a build123d script; adapter.py runs it. The emitted
 script uses the builder API only (BuildPart/BuildSketch + traced operations), names its driving
@@ -17,8 +17,12 @@ Translation conventions (in addition to backends/conformance/ir_cases/README.md)
 * a pattern whose seeds are holes/primitives re-emits the seeds inside the pattern's location
   context (seed + pattern, the build123d form the extract convention counts as 2).
 * mirror: only of all preceding features (the whole body), as build123d's builder mirror.
-* sketch entity sizes bound to a parameter only through a `sketch.constraints` line
-  `<entity_id>.<width|height|radius|diameter> = <parameter>` (the min edge stays fixed).
+* sketch numbers given as `{"ref": p}` (spec 0.3.0) are emitted as the parameter name, so
+  `set-param` drives them (a rect keeps its center). The older `sketch.constraints` binding
+  `<entity_id>.<width|height|radius|diameter> = <parameter>` (the min edge stays fixed) still
+  works for plain numbers.
+* pattern_circular (ADR 0004): instance k at k * step about the axis, step = angle_deg / count
+  (angle_deg = total sweep, default 360) or step = pitch_deg.
 * extrude `symmetric: true` => `distance` is the total length (half on each side).
 Unsupported (error): sweep, loft, rib, boolean, thread_cosmetic, freeform_region, extrude
 `distance2`, patterns of non-placeable seeds, partial mirrors, edge filters other than `all`.
@@ -50,7 +54,7 @@ ALLOWED_PARAMS = {
     "boolean": {"tool_feature"},
     "pattern_linear": {"features", "direction", "count", "spacing", "direction2", "count2",
                        "spacing2"},
-    "pattern_circular": {"features", "axis", "count", "angle_deg"},
+    "pattern_circular": {"features", "axis", "count", "angle_deg", "pitch_deg"},
     "mirror": {"features", "plane"},
     "thread_cosmetic": {"designation", "length"},
     "freeform_region": {"faces", "max_patches"},
@@ -66,6 +70,9 @@ PLACEABLE = ("hole", "primitive")
 BIND_RE = re.compile(
     r"^\s*([A-Za-z]\w*)\.(width|height|radius|diameter)\s*=\s*([a-z][a-z0-9_]*)\b"
 )
+
+
+SPEC_VERSION = "0.3.0"
 
 
 class IRError(ValueError):
@@ -90,8 +97,9 @@ def validate(ir: dict) -> list[str]:
     req(ir, ("spec_version", "part_id", "revision", "units", "datums", "features"), "IR")
     if errs:
         return errs
-    if ir["spec_version"] != "0.2.0":
-        errs.append(f"spec_version {ir['spec_version']!r} != '0.2.0'")
+    if ir["spec_version"] != SPEC_VERSION:
+        hint = " (upgrade with `recadbench-spec migrate`)" if ir["spec_version"] == "0.2.0" else ""
+        errs.append(f"spec_version {ir['spec_version']!r} != {SPEC_VERSION!r}{hint}")
     if ir["units"] != "mm":
         errs.append("units must be 'mm'")
     ids: list[str] = []
@@ -151,6 +159,11 @@ def validate(ir: dict) -> list[str]:
                         check_sel(s, k)
         if "sketch" in f:
             check_sel(f["sketch"].get("plane", ""), "sketch.plane")
+            for name in _sketch_refs(f["sketch"]):
+                if name not in params:
+                    errs.append(f"feature {fid}: sketch: undeclared parameter {name!r}")
+        if t == "pattern_circular" and {"angle_deg", "pitch_deg"} <= set(f.get("params", {})):
+            errs.append(f"feature {fid}: give at most one of angle_deg / pitch_deg")
         for s in f.get("refs") or []:
             check_sel(s, "refs")
         if t in ("pattern_linear", "pattern_circular", "mirror"):
@@ -165,6 +178,22 @@ def validate(ir: dict) -> list[str]:
             errs.append(f"duplicate id {fid!r}")
         known.add(fid)
     return errs
+
+
+def _sketch_refs(sketch: dict) -> list[str]:
+    out: list[str] = []
+
+    def walk(v) -> None:
+        if isinstance(v, dict) and "ref" in v:
+            out.append(v["ref"])
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+
+    for e in sketch.get("entities") or []:
+        for v in e.values():
+            walk(v)
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -369,6 +398,21 @@ class _Gen:
                                                                         "Mode.ADD")
 
     # -- sketch --------------------------------------------------------------------------------
+    def _numeric(self, e: dict) -> dict:
+        """Entity with every {"ref"} replaced by its parameter value (for geometry checks)."""
+
+        def conv(v):
+            if isinstance(v, dict) and "ref" in v:
+                return float(self.params[v["ref"]])
+            if isinstance(v, list):
+                return [conv(x) for x in v]
+            return v
+
+        return {k: conv(v) for k, v in e.items()}
+
+    def v2(self, v: list) -> str:
+        return "(" + ", ".join(self.ex(c) for c in v) + ")"
+
     @staticmethod
     def _poly(e: dict) -> list[tuple[float, float]]:
         k = e["kind"]
@@ -425,7 +469,7 @@ class _Gen:
         loose = [e for e in sk["entities"] if e["kind"] in ("line", "arc", "spline")
                  and not e.get("construction")]
         closed = [e for e in closed if not e.get("construction")]
-        polys = [self._poly(e) for e in closed]
+        polys = [self._poly(self._numeric(e)) for e in closed]
         depth = []
         for i, pi in enumerate(polys):
             d = 0
@@ -442,51 +486,59 @@ class _Gen:
             for e in loose:
                 k = e["kind"]
                 if k == "line":
-                    self.emit(f"Line({_vec(e['p1'])}, {_vec(e['p2'])})", 3)
+                    self.emit(f"Line({self.v2(e['p1'])}, {self.v2(e['p2'])})", 3)
                 elif k == "arc":
-                    span = e["end_deg"] - e["start_deg"]
-                    self.emit(f"CenterArc({_vec(e['center'])}, {_num(e['radius'])}, "
-                              f"{_num(e['start_deg'])}, {_num(span)})", 3)
+                    span = f"({self.ex(e['end_deg'])}) - ({self.ex(e['start_deg'])})"
+                    if not any(isinstance(e[x], dict) for x in ("start_deg", "end_deg")):
+                        span = _num(e["end_deg"] - e["start_deg"])
+                    self.emit(f"CenterArc({self.v2(e['center'])}, {self.ex(e['radius'])}, "
+                              f"{self.ex(e['start_deg'])}, {span})", 3)
                 else:
-                    pts = ", ".join(_vec(p) for p in e["points"])
+                    pts = ", ".join(self.v2(p) for p in e["points"])
                     if e.get("closed"):
-                        pts += ", " + _vec(e["points"][0])
+                        pts += ", " + self.v2(e["points"][0])
                     self.emit(f"Spline({pts})", 3)
             self.emit("make_face()", 2)
 
     def entity(self, e: dict, mode: str, binds: dict) -> None:
         k, eid = e["kind"], e.get("id")
+        n = self._numeric(e)
         if k == "rect":
-            cx, cy = e["center"]
-            w, h = _num(e["width"]), _num(e["height"])
-            cxs, cys = _num(cx), _num(cy)
-            if (eid, "width") in binds:
+            cx, cy = n["center"]
+            w, h = self.ex(e["width"]), self.ex(e["height"])
+            cxs, cys = self.ex(e["center"][0]), self.ex(e["center"][1])
+            if (eid, "width") in binds and not isinstance(e["width"], dict):
                 w = binds[(eid, "width")]
-                cxs = f"{_num(cx - e['width'] / 2)} + {w} / 2"
-            if (eid, "height") in binds:
+                cxs = f"{_num(cx - n['width'] / 2)} + {w} / 2"
+            if (eid, "height") in binds and not isinstance(e["height"], dict):
                 h = binds[(eid, "height")]
-                cys = f"{_num(cy - e['height'] / 2)} + {h} / 2"
-            rot = f", rotation={_num(e['angle_deg'])}" if e.get("angle_deg") else ""
+                cys = f"{_num(cy - n['height'] / 2)} + {h} / 2"
+            rot = f", rotation={self.ex(e['angle_deg'])}" if e.get("angle_deg") else ""
             self.emit(f"with Locations(({cxs}, {cys})):", 2)
             self.emit(f"Rectangle({w}, {h}{rot}, mode={mode})", 3)
         elif k == "circle":
-            r = _num(e["radius"])
-            if (eid, "radius") in binds:
+            r = self.ex(e["radius"])
+            if isinstance(e["radius"], dict):
+                pass
+            elif (eid, "radius") in binds:
                 r = binds[(eid, "radius")]
             elif (eid, "diameter") in binds:
                 r = f"{binds[(eid, 'diameter')]} / 2"
-            self.emit(f"with Locations({_vec(e['center'])}):", 2)
+            self.emit(f"with Locations({self.v2(e['center'])}):", 2)
             self.emit(f"Circle({r}, mode={mode})", 3)
         elif k == "slot":
-            (x1, y1), (x2, y2) = e["c1"], e["c2"]
+            # slot geometry (centre, angle, length) is derived from the centres: emitted as
+            # numbers; only the radius stays a driving parameter when it is a {"ref"}
+            (x1, y1), (x2, y2) = n["c1"], n["c2"]
             ang = math.degrees(math.atan2(y2 - y1, x2 - x1))
             dist = math.hypot(x2 - x1, y2 - y1)
+            width = f"2 * {self.ex(e['radius'])}" if isinstance(e["radius"], dict) else _num(
+                2 * e["radius"])
             self.emit(f"with Locations(Location(({_num((x1 + x2) / 2)}, {_num((y1 + y2) / 2)})"
                       f", (0, 0, 1), {_num(ang)})):", 2)
-            self.emit(f"SlotCenterToCenter({_num(dist)}, {_num(2 * e['radius'])}, mode={mode})",
-                      3)
+            self.emit(f"SlotCenterToCenter({_num(dist)}, {width}, mode={mode})", 3)
         elif k == "polygon":
-            pts = ", ".join(_vec(p) for p in e["points"])
+            pts = ", ".join(self.v2(p) for p in e["points"])
             self.emit(f"Polygon({pts}, align=None, mode={mode})", 2)
 
     # -- features ------------------------------------------------------------------------------
@@ -679,13 +731,17 @@ class _Gen:
         if not (isinstance(ax, str) and (ax in self.datums or ax in self.planes)):
             raise IRError(f"feature {f['id']}: pattern axis must be a datum/plane id")
         o, d = self.plane_vectors(ax)
-        ang = self.val(p.get("angle_deg", 360))
-        endpoint = "False" if abs(ang - 360) < 1e-9 else "True"
+        # ADR 0004: step = angle_deg / count (total sweep) or pitch_deg; PolarLocations with
+        # endpoint=False spaces `count` instances by angular_range / count
+        count = self.ex(p["count"])
+        if "pitch_deg" in p:
+            sweep = f"{self.ex(p['pitch_deg'])} * {count}"
+        else:
+            sweep = self.ex(p.get("angle_deg", 360))
         self.emit(f"_axis = Location(Plane(origin={_vec(o)}, z_dir={_vec(d)}))")
         self.emit("with Locations(_axis):")
-        self.emit(f"with PolarLocations(0, int({self.ex(p['count'])}), start_angle=0, "
-                  f"angular_range={self.ex(p.get('angle_deg', 360))}, endpoint={endpoint}):",
-                  2)
+        self.emit(f"with PolarLocations(0, int({count}), start_angle=0, "
+                  f"angular_range={sweep}, endpoint=False):", 2)
         self._emit_seeds(p["features"], 3, xform="_axis.inverse() * ")
         self._pattern_end(f)
 
