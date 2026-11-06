@@ -10,7 +10,7 @@ Agents never call the adapters; the worker and evaluator hosts call them through
 | [`build123d/`](build123d/README.md) | build123d 0.13.0 + pzfreo/build123d-mcp 0.3.91 | MCP | build123d env Python | conformance 10/10 (reference backend) |
 | [`freecad/`](freecad/README.md) | FreeCAD 26.3 + freecad-robust-mcp 0.6.1 ([ADR 0003](../docs/adr/0003-freecad-mcp-selection.md)) | MCP | FreeCAD's Python | conformance 10/10 |
 | [`solidcraft/`](solidcraft/README.md) | tangency-labs/solidcraft 0.30.1 (`solidcraft-cli mcp`) | MCP | any Python ≥ 3.11 + the CLI | conformance 10/10 |
-| [`nx/`](nx/README.md) | Siemens NX (`recadbench nx-run`) | CLI | — | P4, no adapter yet |
+| [`nx/`](nx/README.md) | Siemens NX 2206 (`run_journal.exe`) | CLI: `recadbench nx-run cad/*.py` | any Python ≥ 3.11 (stdlib) + NX on the host | conformance 10/10 (Windows) |
 | [`conformance/`](conformance/README.md) | 10 synthetic IR cases + `run_conformance.py` | — | — | results: [CONFORMANCE.md](conformance/CONFORMANCE.md) |
 | `recad_cli/`, `pyproject.toml` | the `recad` dispatcher (package `recadbench-backends`) | — | — | 0.1.0 |
 | `tests/` | dispatcher tests (fake adapter) | — | — | in CI |
@@ -52,12 +52,13 @@ completed and printed as one JSON object:
 | `RECAD_FREECAD_PYTHON` | Python that can import FreeCAD | **required** for freecad |
 | `RECAD_SOLIDCRAFT_PYTHON` | Python ≥ 3.11 for the solidcraft adapter | this interpreter |
 | `RECAD_SOLIDCRAFT_CLI` | `solidcraft-cli` binary (resolved and passed to the adapter) | `solidcraft-cli` on PATH |
+| `RECAD_NX_PYTHON` | Python ≥ 3.11 for the nx adapter (NX itself: `backends/nx/install.md`) | this interpreter |
 | `RECAD_BACKENDS_DIR` | folder holding `<b>/adapter/adapter.py` | this source tree (editable install), else `./backends` of the current checkout |
 | `RECAD_TIMEOUT_S` | per adapter call | 1800 |
 
 `recad backends [--json]` checks each backend: the adapter is present, the interpreter exists,
-and a probe runs in it (`import build123d`, `import FreeCAD`, or `solidcraft-cli --version` via
-the adapter's `version` subcommand). `run_conformance.py` uses this check to skip unavailable
+and a probe runs in it (`import build123d`, `import FreeCAD`, or `solidcraft-cli --version` / the run_journal.exe
+lookup via the adapter's `version` subcommand). `run_conformance.py` uses this check to skip unavailable
 backends.
 
 ## Tests
@@ -66,5 +67,6 @@ backends.
 pytest backends/tests backends/build123d/tests                 # CI (repo pyproject testpaths)
 <freecad-env>/bin/python -m pytest backends/freecad/tests       # needs FreeCAD; skips without
 RECAD_SOLIDCRAFT_CLI=… pytest backends/solidcraft/tests          # needs the CLI; skips without
+pytest backends/nx/tests                                         # CI part + NX host part (skips without NX)
 python backends/conformance/run_conformance.py                  # all available backends
 ```

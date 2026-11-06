@@ -8,7 +8,7 @@ Update at the end of every session.
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
 | P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
 | P3 | Backends build123d / solidcraft / freecad + conformance suite | done (uncommitted, awaiting review/PR): 3 adapters, `recad` dispatcher, conformance 10/10 on all three, counts identical; FreeCAD MCP = freecad-robust-mcp 0.6.1 (ADR 0003) |
-| P4 | NX backend (runner, adapter, replays) | todo |
+| P4 | NX backend (runner, adapter, replays) | done (H4, PR h4-nx-backend): `recadbench nx-run`, `recad nx` adapter, 10 replays, conformance 10/10 on NX 2206 (Windows), counts identical to build123d |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | todo |
 | P10 | Runner, compose, gate_hook, orchestrator | todo |
@@ -16,6 +16,7 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — H4/P4 NX backend (ASUS, NX 2206): `backends/nx/` runner (`recadbench nx-run cad/<j>.py` over run_journal.exe: part create/open, journal via runpy, save only on success = transaction per run, timeout + child-tree kill, host-wide NX lock for max_parallel 1, logs, syslog excerpt of this run, `cad/last_run.json` with the measured feature list), adapter (`recad nx export|extract|set-param|replay|version`; NX-side `nx_measure.py`, pure `nx_taxonomy.py` mapping measured on NX 2206; set-param on a copy; build123d STEP read-back in a child process), 10 replays (`_nxr.py`, self-contained), backend.yaml (cli, `allowed_commands: recadbench nx-run cad/*.py`, max_parallel 1). Conformance nx 10/10 + build123d 10/10 same run, counts/types identical, all errors < 3e-9, faces = expected. Unmapped proven on NX: Remove Parameters body, STEP-imported body (also when united into a parametric body), assembly components. `recad` routes nx (`RECAD_NX_PYTHON`); minimal `recadbench` console script (nx-run only) in the backends package. Tests: backends/nx/tests (9 taxonomy + 4 CI runner/adapter + 5 NX-host, skip without NX) in testpaths; full suite 253 passed, 1 skipped on the ASUS.
 - 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
 - 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
 - 2026-11-06 — P3: L1 backends build123d (0.13.0 + build123d-mcp 0.3.91, reference, `execute-ir`), freecad (FreeCAD 26.3 + freecad-robust-mcp 0.6.1, ADR 0003), solidcraft (solidcraft-cli 0.30.1): `backend.yaml`, install.md, adapters (export / extract / set-param / replay), 10 replays each, review fixes (dumb-solid fillet/mirror → unmapped, dead ops not counted, Boolean tool bodies, C09/C10 solidcraft replays, usage errors → one JSON). `recad` dispatcher (`backends/recad_cli`, package recadbench-backends 0.1.0): subprocess per call with the backend interpreter, features.json validation, needs_measure STEP measuring, `recad backends`. `backends/conformance/run_conformance.py`: 30/30 case×backend pass, cross-backend counts identical (CONFORMANCE.md). CI now installs ./backends + build123d 0.13.0 and runs backends/tests (28) + backends/build123d/tests (64); full suite 223 passed. FreeCAD (41) and SolidCraft (40) adapter tests pass locally, not in CI.
@@ -56,7 +57,22 @@ Update at the end of every session.
   tested with a fake adapter only.
 - **Non-editable `pip install ./backends`** finds the adapters only from a checkout's `./backends`
   (cwd search) or `RECAD_BACKENDS_DIR`. CI and docs use `-e`.
-- **NX** has no adapter yet (P4). `recad nx …` reports "adapter not implemented", and `recad backends` lists it as unavailable.
+- **NX (P4)**: `recadbench` console script now lives in the backends package with only `nx-run`;
+  P10's runner CLI must take over the `recadbench` name and forward `nx-run` (or import
+  `nx_run.main`), otherwise two packages define the same entry point.
+- **NX gate surface (P10)**: `allowed_commands` is `recadbench nx-run cad/*.py`, but a journal can
+  still call any NX Open API (STEP import, file I/O, os/subprocess). The counter reports imports
+  and dumb bodies as unmapped (gate fail), yet a journal could also read the scan from disk and
+  analyse it in Python. gate_hook / compose should review journals (deny `import_*` importers,
+  `open(` on input/, subprocess) or run NX with a restricted working directory.
+- **NX feature types not in the taxonomy** (Trim / Split Body, Extract, Move Object, synchronous
+  edits, Spiral / Along / General pattern layouts) are unmapped by design (gate fail). If dev
+  runs show agents need Trim Body, that is a taxonomy change (ADR).
+- **NX boolean folding** uses `Feature.GetParents()` (target first, measured on 2206) and the
+  ancestry of the tool; only Unite/Subtract of primitives and the C09 mirror unite were checked on
+  NX. Multi-feature tool bodies are covered by synthetic tests only.
+- **NX conformance is Windows/host-only** (no NX in CI); rerun by hand on NX updates. A full run
+  is 30 NX processes, ~15 min with the lock.
 - Unsupported / unmapped by design (gate fail): direct OCP calls and custom `BasePartObject`s
   (build123d), `Part::*` / imported shapes / binders (freecad); see each backend's mapping table.
 
