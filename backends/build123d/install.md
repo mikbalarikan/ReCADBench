@@ -1,7 +1,44 @@
 # build123d backend — install
 
 L1 backend = [pzfreo/build123d-mcp](https://github.com/pzfreo/build123d-mcp) (Apache-2.0), pinned, not modified.
-Exact pins live in `backend.yaml` (P3); the P1 spike used:
+Pins live in `backend.yaml`. There are two install routes; the conformance suite (P3) ran on route A.
+
+## A. Desktop / CI (Linux x86_64, macOS, Windows) — plain pip (P3 pin)
+
+| Component | Pin | Source |
+|---|---|---|
+| Python | 3.13 (P3 ran 3.13.18; other versions build123d 0.13 supports are untested) | python.org / distro |
+| build123d | `0.13.0` | PyPI (pulls `cadquery-ocp-novtk 8.0.1.1` = OCP 8 / OCCT 8, `ocp_gordon 0.3.1`, `lib3mf`) |
+| build123d-mcp | `0.3.91` | PyPI (requires build123d `>=0.10,<0.14`, mcp `>=2,<3`, vtk `>=9.3`) |
+| mcp | `2.3.0` | PyPI (resolved) |
+| vtk | `9.7.2` | PyPI (resolved; only for build123d-mcp rendering) |
+
+```bash
+python3 -m venv ~/.venvs/recad-b3d
+~/.venvs/recad-b3d/bin/pip install "build123d==0.13.0" "build123d-mcp==0.3.91"
+~/.venvs/recad-b3d/bin/pip check
+~/.venvs/recad-b3d/bin/build123d-mcp --version
+```
+No conda and no shims are needed: OCP 8 ships PyPI wheels (verified on Linux x86_64 only; macOS/Windows wheels exist upstream but were not exercised in P3). (bd_warehouse,
+if installed, must be ≥ 0.4.0 for build123d 0.13; the adapter does not use it.)
+
+Adapter (measurement instrument, runs with this env's interpreter, stdlib + build123d only):
+```bash
+~/.venvs/recad-b3d/bin/python backends/build123d/adapter/adapter.py replay C05_rect_pattern --out-dir /tmp/c05
+~/.venvs/recad-b3d/bin/pytest backends/build123d/tests        # conformance + contract tests
+```
+
+## B. Termux (Android phone) — PoCAD method, build123d 0.10.0
+
+The phone route below stays on the P1 pins (**build123d 0.10.0 / bd_warehouse 0.2.0 / conda-forge
+OCP 7.8.1.1**), because that is what was verified on aarch64. **The adapter does not support 0.10**:
+its runtime trace hooks build123d 0.13 internals (`BuildScope` / `BaseObjectMeta`, used to see the
+active location contexts), so `export|extract|set-param|replay|execute-ir` must run on a route-A
+env. Open item: move the phone to the plain-pip OCP 8 route (PyPI now has aarch64
+`cadquery-ocp-novtk` 8.0 wheels) and rerun `pytest backends/build123d/tests` there; until then a
+Termux worker can run the agent (MCP server) but the post-run adapter calls need a route-A host.
+
+P1 spike pins:
 
 | Component | Pin | Source |
 |---|---|---|
@@ -13,7 +50,7 @@ Exact pins live in `backend.yaml` (P3); the P1 spike used:
 | build123d-mcp | `0.3.91` | PyPI (requires build123d `>=0.10,<0.14`, mcp `>=2,<3`, vtk `>=9.3`) |
 | mcp | 2.3.0 | PyPI (resolved) |
 
-## Termux (Android phone) — PoCAD method
+### Termux details
 
 Same mechanism as [mikbalarikan/PoCAD](https://github.com/mikbalarikan/PoCAD) `install.sh` +
 `scripts/setup-ubuntu.sh`: Termux → proot-distro Ubuntu → micromamba Python 3.12 + conda-forge OCP

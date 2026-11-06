@@ -1,0 +1,17 @@
+{
+  "case": "C08_shell",
+  "volume_mm3": 7152,
+  "volume_source": "analytic",
+  "faces": 11,
+  "feature_count": 2,
+  "features": [
+    "extrude",
+    "shell"
+  ],
+  "set_param": {
+    "name": "wall_t",
+    "value": 3.0,
+    "volume_mm3": 10128
+  },
+  "tolerance_rel": 0.001
+}

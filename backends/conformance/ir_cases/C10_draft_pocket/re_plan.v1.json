@@ -1,0 +1,135 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C10_draft_pocket",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "block with drafted rectangular pocket",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "pocket_depth",
+      "value": 10.0
+    },
+    {
+      "name": "draft_deg",
+      "value": 5.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "D1",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              0,
+              0
+            ],
+            "width": 50,
+            "height": 40
+          }
+        ]
+      },
+      "params": {
+        "distance": 20,
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "type": "extrude",
+      "operation": "cut",
+      "sketch": {
+        "plane": "P_top",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              0,
+              0
+            ],
+            "width": 30,
+            "height": 20
+          }
+        ]
+      },
+      "params": {
+        "distance": {
+          "ref": "pocket_depth"
+        },
+        "direction": [
+          0,
+          0,
+          -1
+        ]
+      }
+    },
+    {
+      "id": "F3",
+      "type": "draft",
+      "params": {
+        "angle_deg": {
+          "ref": "draft_deg"
+        },
+        "faces": [
+          "F2:plane:+X:any",
+          "F2:plane:-X:any",
+          "F2:plane:+Y:any",
+          "F2:plane:-Y:any"
+        ],
+        "neutral": "F1:plane:+Z:max"
+      }
+    }
+  ],
+  "reference_planes": [
+    {
+      "id": "P_top",
+      "origin": [
+        0,
+        0,
+        20
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "top face (z = 20)"
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C09_mirror_bracket",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "mirror-symmetric U bracket",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "bracket_depth",
+      "value": 20.0
+    },
+    {
+      "name": "hole_d",
+      "value": 6.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "P_xz",
+        "entities": [
+          {
+            "kind": "polygon",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                35,
+                0
+              ],
+              [
+                35,
+                30
+              ],
+              [
+                29,
+                30
+              ],
+              [
+                29,
+                6
+              ],
+              [
+                0,
+                6
+              ]
+            ]
+          }
+        ],
+        "constraints": [
+          "half profile: base 35 x 6, wall 6 thick, overall height 30; edge x = 0 on P_yz"
+        ]
+      },
+      "params": {
+        "distance": {
+          "ref": "bracket_depth"
+        },
+        "direction": [
+          0,
+          -1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "type": "hole",
+      "operation": "cut",
+      "params": {
+        "diameter": {
+          "ref": "hole_d"
+        },
+        "through": true,
+        "kind": "simple",
+        "positions": [
+          [
+            17,
+            0,
+            6
+          ]
+        ]
+      },
+      "refs": [
+        "F1:plane:+Z:min"
+      ]
+    },
+    {
+      "id": "F3",
+      "type": "mirror",
+      "params": {
+        "features": [
+          "F1",
+          "F2"
+        ],
+        "plane": "P_yz"
+      }
+    }
+  ],
+  "reference_planes": [
+    {
+      "id": "P_xz",
+      "origin": [
+        0,
+        10,
+        0
+      ],
+      "normal": [
+        0,
+        -1,
+        0
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "front face of the bracket (y = +10); sketch x = +X, sketch y = +Z"
+    },
+    {
+      "id": "P_yz",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        1,
+        0,
+        0
+      ],
+      "x_dir": [
+        0,
+        1,
+        0
+      ],
+      "basis": "symmetry plane x = 0"
+    }
+  ]
+}

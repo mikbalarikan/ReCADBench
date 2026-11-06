@@ -1,0 +1,84 @@
+# L1 pin: FreeCAD backend (ADR 0003). Upstream FreeCAD and the MCP server are used unmodified.
+# Agent path: Claude <-stdio-> freecad-mcp (freecad-robust-mcp server, own venv)
+#             <-XML-RPC localhost-> RobustMCPBridge running inside headless FreeCADCmd.
+id: freecad
+software:
+  name: freecad-robust-mcp
+  version: 0.6.1
+  source: pypi:freecad-robust-mcp==0.6.1  # install with "mcp<2" (0.6.1 imports mcp.server.fastmcp)
+  bridge:
+    name: RobustMCPBridge (FreeCAD workbench, blocking_bridge.py under freecadcmd)
+    source: https://github.com/spkane/freecad-robust-mcp-and-more
+    ref: robust-mcp-workbench-v0.6.1
+  freecad:
+    version: '26.3'
+    build: 26.3.0 20260916 (a4ce44d3)
+    source: conda-forge freecad=2026.09.16 python=3.11 (Linux; occt 8.0.1); FreeCAD 26.3 bundle (Windows)
+interface:
+  kind: mcp
+  mcp:
+    command: freecad-mcp  # the robust server's console script, from its dedicated venv
+    args: []
+    env:
+      FREECAD_MODE: xmlrpc
+      FREECAD_SOCKET_HOST: localhost
+      FREECAD_XMLRPC_PORT: '9875'  # runner assigns 9875 + 10*slot per parallel slot
+      FREECAD_SOCKET_PORT: '9876'  # 9876 + 10*slot
+      # NO EFFECT with the 0.6.1 pin: 0.6.1 parses FREECAD_TIMEOUT_MS but never reads it (the
+      # env default only arrives in 0.7.0-rc.3). The effective limit is execute_python's own
+      # default, timeout_ms=30000 (30 s) per call; agents raise it by passing timeout_ms on the
+      # call. Kept so the value applies unchanged once the pin is bumped past 0.6.1.
+      FREECAD_TIMEOUT_MS: '120000'
+  cad_prefixes:
+    all:
+    - mcp__freecad__
+    mutating:
+    - mcp__freecad__execute_python
+    - mcp__freecad__create_
+    - mcp__freecad__add_sketch_
+    - mcp__freecad__pad_sketch
+    - mcp__freecad__pocket_sketch
+    - mcp__freecad__revolution_sketch
+    - mcp__freecad__groove_sketch
+    - mcp__freecad__loft_sketches
+    - mcp__freecad__sweep_sketch
+    - mcp__freecad__linear_pattern
+    - mcp__freecad__polar_pattern
+    - mcp__freecad__mirrored_feature
+    - mcp__freecad__mirror_object
+    - mcp__freecad__fillet_edges
+    - mcp__freecad__chamfer_edges
+    - mcp__freecad__boolean_operation
+    - mcp__freecad__edit_object
+    - mcp__freecad__delete_object
+    - mcp__freecad__copy_object
+    - mcp__freecad__set_placement
+    - mcp__freecad__rotate_object
+    - mcp__freecad__scale_object
+    - mcp__freecad__undo
+    - mcp__freecad__redo
+    - mcp__freecad__recompute
+    - mcp__freecad__open_document
+    - mcp__freecad__close_document
+    - mcp__freecad__save_document
+    - mcp__freecad__run_macro
+    - mcp__freecad__delete_macro
+    - mcp__freecad__import_step
+    - mcp__freecad__import_stl
+    - mcp__freecad__insert_part_from_library
+    - mcp__freecad__activate_workbench
+hosts:
+- linux
+- windows
+adapter_cli:
+  export: recad freecad export
+  extract: recad freecad extract
+  set_param: recad freecad set-param
+  replay: recad freecad replay
+max_parallel: 2
+# Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+conformance:
+  passed: 10
+  total: 10
+  date: '2026-11-06'
+  software_version: FreeCAD 26.3 (adapter run with the conda-forge freecad Python 3.11)

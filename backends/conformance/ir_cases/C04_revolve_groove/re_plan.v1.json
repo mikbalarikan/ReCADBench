@@ -1,0 +1,130 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C04_revolve_groove",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "stepped shaft with groove",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    },
+    {
+      "id": "D2",
+      "role": "secondary",
+      "kind": "axis",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "basis": "main axis (Z)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "shaft_len",
+      "value": 60.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "revolve",
+      "operation": "new",
+      "sketch": {
+        "plane": "P_xz",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              5,
+              30
+            ],
+            "width": 10,
+            "height": 60,
+            "id": "R1"
+          }
+        ],
+        "constraints": [
+          "R1.height = shaft_len (bottom edge on y = 0)",
+          "R1 left edge on the axis (x = 0)"
+        ]
+      },
+      "params": {
+        "angle_deg": 360,
+        "axis": "D2"
+      }
+    },
+    {
+      "id": "F2",
+      "type": "revolve",
+      "operation": "cut",
+      "sketch": {
+        "plane": "P_xz",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              10,
+              30
+            ],
+            "width": 4,
+            "height": 4,
+            "id": "R2"
+          }
+        ],
+        "constraints": [
+          "groove: radial depth 2 (x 8..10), width 4 centred at y = 30"
+        ]
+      },
+      "params": {
+        "angle_deg": 360,
+        "axis": "D2"
+      }
+    }
+  ],
+  "reference_planes": [
+    {
+      "id": "P_xz",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        -1,
+        0
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "XZ plane through the axis; sketch x = +X (radius), sketch y = +Z"
+    }
+  ]
+}

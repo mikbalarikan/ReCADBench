@@ -1,0 +1,17 @@
+{
+  "case": "C03_counterbore",
+  "volume_mm3": 31010.3983,
+  "volume_source": "analytic",
+  "faces": 9,
+  "feature_count": 2,
+  "features": [
+    "extrude",
+    "hole"
+  ],
+  "set_param": {
+    "name": "cb_depth",
+    "value": 8.0,
+    "volume_mm3": 30755.9293
+  },
+  "tolerance_rel": 0.001
+}

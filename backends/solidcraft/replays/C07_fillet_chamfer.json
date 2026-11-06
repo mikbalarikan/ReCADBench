@@ -1,0 +1,14 @@
+{
+  "description": "ReCADBench conformance replay C07_fillet_chamfer: block 40x30x20; fillet `fillet_r` on the 4 top-face edges; equal chamfer `chamfer_d` on the 4 bottom-face edges",
+  "ir": "backends/conformance/ir_cases/C07_fillet_chamfer/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "fillet_r", "expression": "4 mm"}},
+    {"command": "parameters.add", "params": {"name": "chamfer_d", "expression": "2 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [20, 15]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": 20, "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.fillet", "params": {"edges": [[0, -15, 20], [20, 0, 20], [0, 15, 20], [-20, 0, 20]], "radius": "fillet_r"}, "ir": "F2"},
+    {"command": "solid.chamfer", "params": {"edges": [[0, -15, 0], [20, 0, 0], [0, 15, 0], [-20, 0, 0]], "distance": "chamfer_d"}, "ir": "F3"}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "description": "ReCADBench conformance replay C01_block: rect 40x30 on XY, extrude `height` +Z",
+  "ir": "backends/conformance/ir_cases/C01_block/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "height", "expression": "20 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [20, 15]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": "height", "direction": "positive"}, "ir": "F1"}
+  ]
+}

@@ -7,7 +7,7 @@ Update at the end of every session.
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
 | P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
-| P3 | Backends build123d / solidcraft / freecad + conformance suite | todo |
+| P3 | Backends build123d / solidcraft / freecad + conformance suite | done (uncommitted, awaiting review/PR): 3 adapters, `recad` dispatcher, conformance 10/10 on all three, counts identical; FreeCAD MCP = freecad-robust-mcp 0.6.1 (ADR 0003) |
 | P4 | NX backend (runner, adapter, replays) | todo |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | todo |
@@ -16,6 +16,10 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
+- 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
+- 2026-11-06 — P3: L1 backends build123d (0.13.0 + build123d-mcp 0.3.91, reference, `execute-ir`), freecad (FreeCAD 26.3 + freecad-robust-mcp 0.6.1, ADR 0003), solidcraft (solidcraft-cli 0.30.1): `backend.yaml`, install.md, adapters (export / extract / set-param / replay), 10 replays each, review fixes (dumb-solid fillet/mirror → unmapped, dead ops not counted, Boolean tool bodies, C09/C10 solidcraft replays, usage errors → one JSON). `recad` dispatcher (`backends/recad_cli`, package recadbench-backends 0.1.0): subprocess per call with the backend interpreter, features.json validation, needs_measure STEP measuring, `recad backends`. `backends/conformance/run_conformance.py`: 30/30 case×backend pass, cross-backend counts identical (CONFORMANCE.md). CI now installs ./backends + build123d 0.13.0 and runs backends/tests (28) + backends/build123d/tests (64); full suite 223 passed. FreeCAD (41) and SolidCraft (40) adapter tests pass locally, not in CI.
+- 2026-11-06 — P3 completeness review: conformance rerun 30/30 (counts identical); count is derived (one extra fillet in a C10 copy → n 3→4 on all three backends, same volume 34349.98 mm³); `cad_prefixes.mutating` checked against live `tools/list` of build123d-mcp 0.3.91, solidcraft-cli 0.30.1 `mcp --headless` and freecad-robust-mcp 0.6.1. Fixed: solidcraft adapter usage errors now one JSON + exit 1 (was argparse exit 2), +4 tests (usage, added-fillet count); ADR 0003 test count 35→41; build123d backend.yaml note on mesh-analysis tools.
 - 2026-11-06 — dataset tools on Windows: `make_task.py` / `register_gt.py` write LF (`newline="\n"`) so MANIFEST.json hashes of task.yaml survive git autocrlf; runtime messages are ASCII (the final summary `print` crashed on a cp1252 console). Tests pin both.
 - 2026-11-06 — scanreg: robust shrinking ICP trim + coarse ICP after PCA (raw scans that include the scanner table / fixtures), KD-tree prefilter for far points (was pathologically slow), floor excludes extraneous scan geometry (> 1.5 mm, reported separately). Desktop survey: R385 scans and CAD are in different frames (no saved transform) → `--init pca`; pilots HS01, DR02, HS04.
 - 2026-11-05 — P6 tooling: `dataset/tools/scanreg.py` (PCA coarse + trimmed point-to-plane ICP, floor, observability with open-boundary/opposite-normal masks), `register_gt.py`, `make_task.py` (byte-identical scan copy, agent-visible metadata only, MANIFEST + splits); 13 synthetic tests (ICP 4 µm in 6 iterations). `recadbench-gt/AUTHORING.md` written.
@@ -26,6 +30,35 @@ Update at the end of every session.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From P3 (backends)
+- **CAD MCPs expose RE analysis** (P10): build123d-mcp 0.3.91 has read-only `mesh_section`,
+  `mesh_holes`, `find_holes`, `recognise_features`, `compare` …; with `import_cad_file` an agent can
+  analyse the scan inside the backend (strategies must use retk only, identical across backends).
+  Importing is mutating and leaves `unmapped`, but import → analyse → reset leaves no trace. The
+  same holds for freecad `import_stl` / solidcraft `pointcloud.*`. `backend_manifest` has no deny
+  list (schema change ⇒ ADR); runner/gate_hook should deny import + mesh tools by name.
+- **docs/adr/README.md index** lists only 0001; add 0002 and 0003.
+- **SolidCraft on Termux ARM64 is untested.** `termux` is not in solidcraft `hosts`; the test steps
+  are in `backends/solidcraft/install.md` ("Termux test"). Run them on the phone before listing it.
+- **build123d on Termux stays on 0.10.0** (PoCAD route, install.md B) while the desktop/CI pin is
+  0.13.0. The Termux worker can run the agent, but adapter calls need a route-A host. Conformance
+  ran only on 0.13.0. Decided for P3; revisit if aarch64 OCP 8 wheels work on the phone.
+- **FreeCAD MCP timeout:** with the 0.6.1 pin, `FREECAD_TIMEOUT_MS` has no effect, and
+  `execute_python` allows 30 s per call unless the call passes `timeout_ms` (wired upstream from
+  0.7.0-rc.3). The recadbench-cad-skills freecad skillset must tell agents to pass `timeout_ms` on long calls.
+- **CI Python 3.11 vs local 3.13:** the build123d adapter suite ran on 3.13.18 here. CI uses 3.11 with
+  `build123d==0.13.0`; the first CI run is the first 3.11 check.
+- **FreeCAD / SolidCraft adapter tests are not in CI** (no FreeCAD / CLI on the runner). They skip
+  without their environment. Conformance for those two must be rerun by hand on each pin bump
+  (`run_conformance.py`). Add a CI job with conda-forge FreeCAD + a cached solidcraft build?
+- **`needs_measure` path is unused** by the current adapters (all three report volumes). It is
+  tested with a fake adapter only.
+- **Non-editable `pip install ./backends`** finds the adapters only from a checkout's `./backends`
+  (cwd search) or `RECAD_BACKENDS_DIR`. CI and docs use `-e`.
+- **NX** has no adapter yet (P4). `recad nx …` reports "adapter not implemented", and `recad backends` lists it as unavailable.
+- Unsupported / unmapped by design (gate fail): direct OCP calls and custom `BasePartObject`s
+  (build123d), `Part::*` / imported shapes / binders (freecad); see each backend's mapping table.
 
 ### From ADR 0002 (real scans)
 - **Golden-example scans over 100 MB** (GE-02 209 MB, GE-04 250 MB; GE-03 92 MB) cannot go in plain git. Options: Git LFS for those files only, Drive, or a lossless compressed copy. Decide before adding them (R385 pilots are all < 40 MB).
@@ -55,7 +88,7 @@ Update at the end of every session.
 - `docs/architecture/contracts/` mirrors `spec/` by hand; keep or drop the mirror?
 
 ### From P1
-- **Pin choice for P3:** build123d-mcp works with build123d 0.10 only if `bd_warehouse==0.2.0` is pinned
+- **Pin choice for P3** (decided in P3: desktop/CI build123d 0.13.0, Termux stays 0.10.0): build123d-mcp works with build123d 0.10 only if `bd_warehouse==0.2.0` is pinned
   (0.3+/0.4 need build123d ≥0.11.1/≥0.12). PyPI `cadquery-ocp-novtk` 7.9/8.0 now has aarch64 wheels, so a
   shim-free build123d 0.13 path may be possible on phones. Decide in P3 (`backend.yaml`).
 - **evaluator/golden vs data hygiene:** P7 builds golden candidates from the 3 *pilot GT parts*, but D3 says no

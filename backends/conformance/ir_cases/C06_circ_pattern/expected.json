@@ -1,0 +1,18 @@
+{
+  "case": "C06_circ_pattern",
+  "volume_mm3": 26577.8738,
+  "volume_source": "analytic",
+  "faces": 9,
+  "feature_count": 3,
+  "features": [
+    "extrude",
+    "hole",
+    "pattern_circular"
+  ],
+  "set_param": {
+    "name": "hole_d",
+    "value": 8.0,
+    "volume_mm3": 25258.4049
+  },
+  "tolerance_rel": 0.001
+}

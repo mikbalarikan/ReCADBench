@@ -1,0 +1,12 @@
+{
+  "description": "ReCADBench conformance replay C02_through_hole: block 40x30x20; simple through hole d=`hole_d` at (0,0) drilled from the top face",
+  "ir": "backends/conformance/ir_cases/C02_through_hole/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "hole_d", "expression": "10 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [20, 15]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": 20, "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.hole", "params": {"position": [0, 0, 20], "diameter": "hole_d", "type": "simple"}, "ir": "F2"}
+  ]
+}

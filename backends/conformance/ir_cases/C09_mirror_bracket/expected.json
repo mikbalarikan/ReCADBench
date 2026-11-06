@@ -1,0 +1,18 @@
+{
+  "case": "C09_mirror_bracket",
+  "volume_mm3": 13820.708,
+  "volume_source": "analytic",
+  "faces": 12,
+  "feature_count": 3,
+  "features": [
+    "extrude",
+    "hole",
+    "mirror"
+  ],
+  "set_param": {
+    "name": "bracket_depth",
+    "value": 25.0,
+    "volume_mm3": 17360.708
+  },
+  "tolerance_rel": 0.001
+}

@@ -1,0 +1,15 @@
+{
+  "description": "ReCADBench conformance replay C09_mirror_bracket: half L-profile on P_xz (XZ flipped, offset bracket_depth/2 along +Y => plane y=+depth/2, normal -Y), extruded `bracket_depth` along -Y; hole d=`hole_d` at (17,0) from the base top (z=6); feature-mode mirror of [F1, F2] about YZ, joined to the original by a single-tool solid.combine (the merge is part of the mirror)",
+  "ir": "backends/conformance/ir_cases/C09_mirror_bracket/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "bracket_depth", "expression": "20 mm"}},
+    {"command": "parameters.add", "params": {"name": "hole_d", "expression": "6 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XZ", "flip": true, "offset": "bracket_depth / 2"}},
+    {"command": "sketch.line", "params": {"points": [[0, 0], [35, 0], [35, 30], [29, 30], [29, 6], [0, 6]], "closed": true}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": "bracket_depth", "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.hole", "params": {"position": [17, 0, 6], "diameter": "hole_d", "type": "simple"}, "ir": "F2"},
+    {"command": "solid.mirror", "params": {"features": ["Extrude1", "Hole1"], "plane": "YZ"}, "ir": "F3"},
+    {"command": "solid.combine", "params": {"target": "Body1", "tools": ["Body2"], "operation": "join"}, "ir": "F3"}
+  ]
+}
