@@ -178,7 +178,7 @@ def run_cli(script: dict, outs: tuple[str, ...] = ()) -> list:
     try:
         sp = os.path.join(tmp, "script.json")
         rp = os.path.join(tmp, "results.json")
-        with open(sp, "w", encoding="utf-8") as fh:
+        with open(sp, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(script, fh)
         cmd = [cli_path(), "run", sp, "--results", "--quiet", "--json-out", rp]
         for o in outs:
@@ -494,7 +494,7 @@ def cmd_set_param(a) -> dict:
         return {"ok": False, "error": f"parameter {a.name!r} not in the model (user: {users})"}
     new = set_param_script(script, a.name, a.value, params[a.name].get("unit"))
     if a.native_out:
-        with open(a.native_out, "w", encoding="utf-8") as fh:
+        with open(a.native_out, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(new, fh, indent=1)
             fh.write("\n")
     _, _, plist2 = rebuild(new)
@@ -555,7 +555,7 @@ def cmd_replay(a) -> dict:
 
 def _write_json(path: str, doc: dict) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(doc, fh, indent=2)
         fh.write("\n")
 
