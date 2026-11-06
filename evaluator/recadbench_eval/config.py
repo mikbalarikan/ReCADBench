@@ -58,6 +58,16 @@ class EvalConfig:
     pass_key_dims: float = 0.8
     # S5 (enabled from M5) — off unless asked for
     s5: bool = False
+    # GT-copy backstop (gate): a candidate whose volume AND face count equal the GT's within
+    # these tolerances AND whose two-way P95 deviation is below gt_copy_floor_frac x
+    # max(scan_floor p95, class tight band) is a copy of gt.step, not a reconstruction from the
+    # scan. Reported for every run, enforced outside Track T (the oracle executes the reference
+    # plan: a GT-identical result is expected there). Off only for golden / regression
+    # candidates, which ARE gt.step by construction (golden.py).
+    gt_copy_check: bool = True
+    gt_copy_volume_rel: float = 1e-3
+    gt_copy_faces_rel: float = 0.05
+    gt_copy_floor_frac: float = 0.2
 
     @classmethod
     def from_file(cls, path: str | Path, **overrides) -> EvalConfig:

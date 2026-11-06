@@ -4,10 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recadbench-run"
-version = "0.0.0"
-description = "ReCADBench runner: compose, gate hook, agent backends, finish"
+version = "0.1.0"
+description = "ReCADBench runner: compose, gate hook, agent backends, finish (`recadbench` CLI)"
 requires-python = ">=3.11"
-dependencies = ["recadbench-spec"]  # P1 stub: real dependencies added by the implementing prompt
+# core = stdlib + spec + the backends dispatcher (recad, nx-run) + pyyaml: Termux-capable
+dependencies = ["recadbench-spec", "recadbench-backends", "pyyaml>=6"]
+
+[project.optional-dependencies]
+sdk = ["claude-agent-sdk>=0.2"]
+litellm = ["litellm"]
+
+[project.scripts]
+# the runner owns the `recadbench` name; `recadbench nx-run` is forwarded to backends/nx/runner
+recadbench = "recadbench_run.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["recadbench_run*"]
+
+[tool.setuptools.package-data]
+recadbench_run = ["gate_policy.yaml"]

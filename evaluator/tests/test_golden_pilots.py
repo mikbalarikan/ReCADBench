@@ -16,10 +16,14 @@ from pathlib import Path
 
 import pytest
 from recadbench_eval import brep, golden, gtstore
+from recadbench_eval.config import EvalConfig
 from recadbench_eval.report import markdown
 from recadbench_eval.score import score_run, validate_result
 
 PILOTS = ("r385_hs01_motor_mount", "r385_dr02_wobble_plate", "r385_hs04_pump_head")
+# the candidates are gt.step by construction: the GT-copy backstop is off for the scores and
+# checked on its own in test_pilot_gt_copy_flags_golden
+GOLDEN_CFG = EvalConfig(gt_copy_check=False)
 
 pytestmark = pytest.mark.skipif(
     not gtstore.available() or not all(
@@ -40,17 +44,17 @@ def pilot_results(tmp_path_factory):
             info = golden.build(kind, d, part_id=pid, gt_shape=shape, gt_plan=part.plan,
                                 key_dims=part.key_dims, meta=part.meta,
                                 T_scan_to_gt=part.T_scan_to_gt)
-            out[(pid, kind)] = (score_run(d, pid), info)
+            out[(pid, kind)] = (score_run(d, pid, GOLDEN_CFG), info, d)
     table = os.environ.get("RECADBENCH_PILOT_TABLE")
     if table:
-        Path(table).write_text(markdown([r for r, _ in out.values()], "R385 pilot goldens"),
+        Path(table).write_text(markdown([r for r, _, _ in out.values()], "R385 pilot goldens"),
                                encoding="utf-8", newline="\n")
     return out
 
 
 @pytest.mark.parametrize("pid", PILOTS)
 def test_pilot_good_passes(pilot_results, pid):
-    res, _ = pilot_results[(pid, "good")]
+    res, _, _ = pilot_results[(pid, "good")]
     validate_result(res)
     assert res["gate"]["ok"] and res["pass"]
     assert res["metrics"]["p_tight"] >= 0.95 and res["metrics"]["p_wide"] >= 0.99
@@ -82,7 +86,7 @@ def test_pilot_ordering_and_pass(pilot_results, pid):
 
 @pytest.mark.parametrize("pid", PILOTS)
 def test_pilot_band_eff_and_inferred(pilot_results, pid):
-    res, _ = pilot_results[(pid, "good")]
+    res, _, _ = pilot_results[(pid, "good")]
     meta = gtstore.load_part(pid).meta
     floor = meta["scan_floor"]["scan_to_gt_p95_mm"]
     assert res["metrics"]["band_tight_eff_mm"] == pytest.approx(max(0.1, 1.5 * floor), abs=1e-6)
@@ -90,3 +94,16 @@ def test_pilot_band_eff_and_inferred(pilot_results, pid):
     assert "p_tight_inferred" in res["metrics"]
     share = res["details"]["S1"]["observable_share_gt_samples"]
     assert share == pytest.approx(meta["observability"]["observable_fraction"], abs=0.02)
+
+
+@pytest.mark.parametrize("pid", PILOTS)
+def test_pilot_gt_copy_flags_golden(pilot_results, pid):
+    """The golden candidates are gt.step: with the GT-copy backstop on (the default) the
+    GT-geometry ones fail the gate as a suspected copy; the measurements are in details."""
+    for kind in ("good", "lego"):
+        _, _, d = pilot_results[(pid, kind)]
+        res = score_run(d, pid)
+        assert not res["gate"]["ok"] and "suspected GT copy" in res["gate"]["reason"], kind
+        gc = res["details"]["gt_copy"]
+        assert gc["suspected"] and gc["enforced"]
+        assert gc["p95_all_mm"] < gc["p95_limit_mm"]

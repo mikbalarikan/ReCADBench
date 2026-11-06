@@ -18,6 +18,10 @@ Aligned checks:
   used rather than the raw scan, whose extents include stray patches and scanner-table remnants);
 - freeform cover-up (tier 1-2 only): > 30% of the GT area that is plane / cylinder is matched
   (nearest candidate sample) to a B-spline / free-form candidate face.
+
+GT-copy backstop (after the two-way deviation, ``gt_copy_gate``): volume and face count equal
+to the GT's within tight tolerances AND the two-way P95 below a fraction of the scan noise floor
+= ``suspected GT copy`` (the run reached gt.step; the runner's code checks are best effort).
 """
 
 from __future__ import annotations
@@ -122,6 +126,30 @@ def bbox_gate(g: GateResult, pred_pts: np.ndarray, gt_pts: np.ndarray, cfg: Eval
     else:
         g.passed("bbox")
     return g
+
+
+def gt_copy_gate(g: GateResult, *, pred_volume: float, gt_volume: float, faces_pred: int,
+                 faces_gt: int, p95_all: float, floor_p95: float, tight_class: float,
+                 cfg: EvalConfig, enforce: bool = True) -> dict:
+    """The GT-copy backstop; returns the measurements (always reported in details). It fails
+    the gate only when ``cfg.gt_copy_check`` and ``enforce`` (the caller: not Track T, where
+    the agent executes the reference plan and a GT-identical result is the expected one)."""
+    vol_rel = abs(abs(pred_volume) - gt_volume) / gt_volume if gt_volume > 0 else None
+    faces_rel = abs(faces_pred - faces_gt) / max(faces_gt, 1)
+    limit = cfg.gt_copy_floor_frac * max(float(floor_p95 or 0.0), tight_class)
+    suspected = bool(vol_rel is not None and vol_rel <= cfg.gt_copy_volume_rel
+                     and faces_rel <= cfg.gt_copy_faces_rel and p95_all < limit)
+    out = {"volume_rel": vol_rel, "faces_pred": int(faces_pred), "faces_gt": int(faces_gt),
+           "faces_rel": faces_rel, "p95_all_mm": p95_all, "p95_limit_mm": limit,
+           "floor_p95_mm": float(floor_p95 or 0.0), "suspected": suspected,
+           "enforced": bool(cfg.gt_copy_check and enforce)}
+    if cfg.gt_copy_check and enforce and suspected:
+        g.fail("gt_copy", f"suspected GT copy: volume within {vol_rel:.2e}, {faces_pred} vs "
+                          f"{faces_gt} faces, two-way P95 {p95_all:.4f} mm < {limit:.4f} mm "
+                          "(far below the scan noise floor)")
+    elif cfg.gt_copy_check and enforce:
+        g.passed("gt_copy")
+    return out
 
 
 def freeform_gate(g: GateResult, *, tier: int, gt_pts: np.ndarray, gt_kind: np.ndarray,

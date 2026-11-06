@@ -78,6 +78,7 @@ def s1(gt: Samples, gt_obs: np.ndarray, gt_surface: Surface, pred: Samples,
         "p95": float(np.quantile(d_obs, 0.95)) if len(d_obs) else 0.0,
         "max": float(d_obs.max()) if len(d_obs) else 0.0,
         "hausdorff": float(d_all.max()),
+        "p95_all": float(np.quantile(d_all, 0.95)),
         "targets_met": bool(p_tight >= bands.tight_target and p_wide >= bands.wide_target),
         "detail": {
             "gt_to_pred_p_tight": _share(d_g2p[gt_obs], bands.tight),

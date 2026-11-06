@@ -15,7 +15,9 @@ from recadbench_eval import brep, golden, gtstore
 from recadbench_eval.config import EvalConfig
 from recadbench_eval.score import dumps, score_run, validate_result, write_result
 
-CFG = EvalConfig(n_samples=20000, icp_samples=8000)
+# golden / regression candidates are gt.step by construction: GT-copy backstop off (it has
+# its own tests in test_gt_copy.py)
+CFG = EvalConfig(n_samples=20000, icp_samples=8000, gt_copy_check=False)
 VARIANTS = {"syn_clean": "clean", "syn_scan": "scan"}
 
 

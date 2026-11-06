@@ -15,8 +15,11 @@ Contract (05_TOOLS "recadbench nx-run contract"):
   * exit 0 if ok, 1 on any NX / journal error, 2 on usage errors. One JSON summary on stdout;
   * before NX starts, __pycache__ folders are purged and the journal plus every other .py in the
     run dir and in lib/ (comments removed) are checked against ``backends/nx/backend.yaml``
-    ``denied_tools`` (ADR 0004: journal code that imports or analyses the scan); a match, or a
-    compiled / zipped module there, refuses the run (exit 1, ``denied: true``, part untouched).
+    ``denied_tools`` (ADR 0004: journal code that imports or analyses the scan) and the shared
+    CAD code policy (``backends/recad_cli/code_policy.py``, profile ``nx``: an AST allow-list, no
+    file / process / import-system / introspection access; skillset files compose copied are
+    trusted while unchanged); a match, or a compiled / zipped module there, refuses the run
+    (exit 1, ``denied: true``, part untouched).
 
 Environment:
   RECADBENCH_NX_RUN_JOURNAL   run_journal.exe (default: %UGII_BASE_DIR%\\NXBIN\\run_journal.exe,
@@ -48,8 +51,10 @@ WRAPPER = HERE / "nx_wrapper.py"
 ADAPTER_DIR = HERE.parent / "adapter"
 DEFAULT_TIMEOUT_S = 120.0
 DEFAULT_NX = r"C:\Program Files\Siemens\NX2206"
-# Variables of session-capture / customisation plugins that must not leak into a batch run.
-STRIP_ENV = ("UGII_CUSTOM_DIRECTORY_FILE", "UGII_STARTUP_MACRO")
+# Variables of session-capture / customisation plugins that must not leak into a batch run,
+# and the gate's key-store location (the journal is agent code: runner/recadbench_run/gate_key.py).
+STRIP_ENV = ("UGII_CUSTOM_DIRECTORY_FILE", "UGII_STARTUP_MACRO", "RECADBENCH_GATE_KEY_DIR")
+CODE_POLICY = HERE.parent.parent / "recad_cli" / "code_policy.py"
 SYSLOG_KEYS = ("error", "exception", "fail", "traceback", "fatal", "warning: ")
 
 
@@ -383,16 +388,31 @@ def purge_bytecode(run_dir: Path) -> None:
                 shutil.rmtree(d, ignore_errors=True)
 
 
+def code_policy():
+    """backends/recad_cli/code_policy.py (stdlib only), loaded by path."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("recadbench_code_policy", CODE_POLICY)
+    if spec is None or spec.loader is None or not CODE_POLICY.is_file():
+        raise NxEnvError(f"code policy missing at {CODE_POLICY}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def check_journal(run_dir: Path, journal: Path, command: str) -> str | None:
-    """Reason text when code the journal can import is denied by backend.yaml denied_tools;
-    None when the run may start.
+    """Reason text when code the journal can import is denied by backend.yaml denied_tools or
+    by the CAD code policy; None when the run may start.
 
     Checked: the journal, then every .py anywhere in the run dir (cad/ siblings, lib/, the run
     root, any folder a journal can put on sys.path by a literal path) and in RECADBENCH_NX_LIB
     when that lies outside the run dir; any importable file the regex cannot read
-    (OPAQUE_SUFFIXES) refuses the run too. Code reached only through runtime-built paths or
-    exec() of a non-.py file stays a residual risk (STATUS)."""
+    (OPAQUE_SUFFIXES) refuses the run too. The code policy denies the means to reach code
+    through runtime-built paths (os, sys.path, zipfile, importlib, open, exec, ...); what the
+    NX Open API itself can do stays a residual risk (runner README "Security model")."""
     rules = denied_rules()
+    cp = code_policy()
+    pins = cp.pinned(run_dir)
     files = [journal]
     for root in _code_roots(run_dir):
         for p in sorted(root.rglob("*")):
@@ -401,6 +421,7 @@ def check_journal(run_dir: Path, journal: Path, command: str) -> str | None:
             # .pyw is a source suffix of the import system on Windows
             if p.suffix.lower() in (".py", ".pyw") and p.resolve() != journal and p.is_file():
                 files.append(p)
+    texts = []
     for f in files:
         try:
             text = journal_source(f.read_bytes())
@@ -409,6 +430,15 @@ def check_journal(run_dir: Path, journal: Path, command: str) -> str | None:
         hit = denied(command, text, rules)
         if hit:
             return f"denied: {_rel(f, run_dir)}: {hit.get('reason', 'backend.yaml denied_tools')}"
+        texts.append((f, text))
+    # then the CAD code policy over the same files (a scan reader is reported as such first)
+    for f, text in texts:
+        rel = _rel(f, run_dir)
+        if rel.startswith("lib/") and not cp.is_pinned(run_dir, f, pins):
+            return f"denied: {rel}: lib/ differs from what compose copied"
+        why = cp.check_file(run_dir, f, "nx", text, pins)
+        if why:
+            return f"denied: {why}"
     return None
 
 

@@ -1,0 +1,19 @@
+# Tiny experiment for the orchestrator tests (known run count: see test_expand.py).
+name: tiny
+parts: [part_a, part_b]
+replicates: 2
+harness_level: H3
+budgets: {max_turns: 40, max_wall_s: 1200}
+refs: {strategy: origin/main}
+models:
+  - {id: claude-sonnet-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
+  - {id: replay, provider: replay, agent_backend: replay,
+     agent_options: {script: oracle_build123d}}
+tracks:
+  T: {strategies: [oracle], skillsets: [build123d@v1, none@build123d]}
+  E: {strategies: [B, D], skillsets: [build123d@v1, nx@v1]}
+  S: {strategies: [B]}
+exclude:
+  - {track: E, model: replay}
+  - {track: S, model: replay}
+  - {track: E, strategy: D, skillset: nx@v1}
