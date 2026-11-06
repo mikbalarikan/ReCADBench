@@ -49,7 +49,7 @@ def run(*args: str, ok: bool = True) -> dict:
 
 
 def expected(case: str) -> dict:
-    return json.loads((CASES_DIR / case / "expected.json").read_text())
+    return json.loads((CASES_DIR / case / "expected.json").read_text(encoding="utf-8"))
 
 
 def within(value: float, target: float, rel: float) -> bool:
@@ -76,7 +76,7 @@ def test_replay_volume_and_count(case, replayed):
     assert res["solids"] == 1
     assert within(res["volume_mm3"], exp["volume_mm3"], exp["tolerance_rel"]), res
     assert res["count"] == exp["feature_count"]
-    feats = json.loads((d / "features.json").read_text())
+    feats = json.loads((d / "features.json").read_text(encoding="utf-8"))
     assert feats["tool"] == "freecad"
     assert feats["unmapped"] == []
     counted = [f["taxonomy_type"] for f in feats["features"] if f["counted"]]
@@ -149,7 +149,7 @@ def test_dumb_solid_is_unmapped(tmp_path):
     """)
     out = tmp_path / "f.json"
     res = run("extract", str(native), "--out", str(out))
-    feats = json.loads(out.read_text())
+    feats = json.loads(out.read_text(encoding="utf-8"))
     assert res["count"] == 1
     assert res["unmapped"] == 2
     assert any("DumbBox" in u for u in feats["unmapped"])
@@ -232,7 +232,7 @@ def test_boolean_tool_body_is_not_a_result_body(tmp_path):
     # cutting a single-feature tool body is part of that feature (taxonomy note; same as the
     # build123d tracer): Pad + Pad2, boolean folded
     assert res["features"] == ["extrude", "extrude"], res
-    feats = json.loads(out.read_text())
+    feats = json.loads(out.read_text(encoding="utf-8"))
     bo = next(f for f in feats["features"] if f["native_type"] == "PartDesign::Boolean")
     assert not bo["counted"] and bo["params"]["merged_into"] == "ToolBody:1"
     assert feats["face_count"] == res_faces(tmp_path, native)
@@ -286,7 +286,7 @@ def test_scratch_body_features_are_not_counted(tmp_path):
     """)
     out = tmp_path / "f.json"
     res = run("extract", str(native), "--out", str(out))
-    feats = json.loads(out.read_text())
+    feats = json.loads(out.read_text(encoding="utf-8"))
     assert res["count"] == 1 and res["unmapped"] == 0, feats
     assert len(feats["not_in_final_part"]) == 3
     step = run("export", str(native), "--out", str(tmp_path / "x.step"))
