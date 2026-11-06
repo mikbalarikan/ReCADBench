@@ -408,3 +408,62 @@ def test_usage_errors_are_json_exit_1(argv):
     assert proc.returncode == 1 and len(lines) == 1
     res = json.loads(lines[0])
     assert res["ok"] is False and "usage" in res["error"]
+
+
+# review PR #8: untraced geometry smuggled into a traced shape or builder must land in `unmapped`
+@pytest.mark.parametrize("code", [
+    # kernel handle of a traced Box swapped by user code (no literal `.wrapped`, no OCP import)
+    """
+    import sys
+    from build123d import Box
+    mk = sys.modules["OCP.BRepPrimAPI"].BRepPrimAPI_MakeBox(3.0, 4.0, 5.0).Solid()
+    part = Box(10, 10, 10)
+    setattr(part, "wrap" + "ped", mk)
+    part = part.moved(part.location)
+    """,
+    # same through the instance __dict__ (bypasses the property), then merged
+    """
+    import sys
+    from build123d import Box
+    mk = sys.modules["OCP.BRepPrimAPI"].BRepPrimAPI_MakeBox(3.0, 4.0, 5.0).Solid()
+    part = Box(10, 10, 10)
+    part.__dict__["_wrap" + "ped"] = mk
+    part = part + Box(1, 1, 1)
+    """,
+    # insert() of an untraced solid into a BuildPart
+    """
+    from build123d import BuildPart, Box, Pos, Solid, Shell, insert
+    raw = Pos(5, 0, 0) * Solid(Shell(Box(4, 4, 4).faces()))
+    with BuildPart() as bp:
+        Box(10, 10, 10)
+        insert(raw)
+    part = bp.part
+    """,
+    # untraced op that adds geometry to the builder (bounding_box in ADD mode)
+    """
+    from build123d import BuildPart, Box, Pos, bounding_box, Mode, Cylinder
+    with BuildPart() as bp:
+        Box(10, 10, 10)
+        bounding_box(Pos(6, 0, 0) * Cylinder(4, 4, mode=Mode.PRIVATE), mode=Mode.ADD)
+    part = bp.part
+    """,
+], ids=["setattr_wrapped", "dict_wrapped", "insert_untraced", "bounding_box_add"])
+def test_smuggled_geometry_is_unmapped(tmp_path, code):
+    doc = _extract(tmp_path, code)
+    assert doc["unmapped"], doc
+
+
+def test_in_place_build123d_edits_stay_mapped(tmp_path):
+    doc = _extract(tmp_path, """
+        from build123d import Axis, Box, Cylinder, Location, fillet, insert, BuildPart
+        part = Box(10, 10, 10)
+        part.move(Location((5, 0, 0)))
+        part = part.clean()
+        part = part - Cylinder(2, 20)
+        part = fillet(part.edges().filter_by(Axis.Z), 1)
+        with BuildPart() as bp:
+            insert(part)
+        part = bp.part
+        """)
+    assert doc["unmapped"] == [] and doc["count"] == 3, doc
+

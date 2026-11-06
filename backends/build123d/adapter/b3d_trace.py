@@ -31,7 +31,10 @@ Counting conventions (identical across backends, see replays/README.md):
   by user code (`Solid.make_box`, `Solid.extrude`, `Shape.cast`, ...), imported geometry
   (`import_step`, `import_stl`, `Mesher`, ...), BasePartObject subclasses without a taxonomy
   mapping (custom/bd_warehouse objects), boolean/add operands with no traced provenance,
-  fillet/chamfer/offset/draft/mirror applied to a body with no traced provenance.
+  fillet/chamfer/offset/draft/mirror applied to a body with no traced provenance, and geometry
+  replaced outside build123d operations: a traced shape whose kernel handle (`_wrapped`) user code
+  swapped, or a BuildPart whose part changed between traced operations (untraced ops such as
+  `bounding_box(mode=ADD)`). `insert()` is traced like `add()`.
 
 stdlib + build123d only (backend env has no recadbench_spec).
 """
@@ -296,6 +299,34 @@ def _orientation(shape: Any) -> frozenset:
 COPY_OPS = ("moved", "located", "translate", "rotate")  # placement copies (copy lineage)
 
 
+def _fingerprint(shape: Any) -> tuple:
+    """(shape object, its kernel handle object, a handle copy sharing the TShape)."""
+    w = getattr(shape, "_wrapped", None) if shape is not None else None
+    try:
+        twin = w.Located(w.Location()) if w is not None else None
+    except Exception:
+        twin = None
+    return shape, w, twin
+
+
+def _same(shape: Any, fp: tuple) -> bool:
+    """True when `shape` still holds the geometry fingerprinted in `fp`.
+
+    In-place placement changes (`move`, `locate`) keep the TShape and pass; a replaced
+    `_wrapped` handle, or a handle whose TShape was swapped, fails.
+    """
+    _, w0, twin = fp  # the Part object may be re-wrapped by build123d; the handle may not
+    w = getattr(shape, "_wrapped", None) if shape is not None else None
+    if w is not w0:
+        return False
+    if w is None or twin is None:
+        return True
+    try:
+        return bool(w.IsPartner(twin))
+    except Exception:
+        return True
+
+
 class Tracer:
     """Install with `with Tracer(script_path) as t: run(...)`; read t.features / t.unmapped."""
 
@@ -315,6 +346,11 @@ class Tracer:
         self.last_buildpart: Any = None
         self.final_source: Any = None
         self.shown: list[Any] = []
+        # kernel-handle fingerprints: a traced shape (or a BuildPart's part) whose geometry is
+        # replaced outside build123d operations loses its provenance (gate fail)
+        self._wsnap: dict[int, Any] = {}  # id(shape) -> fingerprint at registration
+        self._bsnap: dict[int, Any] = {}  # id(BuildPart) -> fingerprint of its part
+        self._tampered: set[int] = set()  # ids already reported
 
     # -- helpers -------------------------------------------------------------------------------
     def _caller(self, skip: int = 2) -> tuple[str, int]:
@@ -335,17 +371,48 @@ class Tracer:
             return
         self._prov[id(obj)] = p
         self._keep.append(obj)
+        if isinstance(obj, bd.Shape):
+            self._wsnap[id(obj)] = _fingerprint(obj)
         if isinstance(obj, (list, tuple)):
             for o in obj:
                 self._register(o, p)
 
+    def _tamper(self, key: int, what: str) -> None:
+        if key not in self._tampered:
+            self._tampered.add(key)
+            self.unmapped.append(f"{what}: geometry replaced outside build123d operations "
+                                 "(kernel handle / builder part changed by user code)")
+
+    def _sync_builder(self, b: Any) -> None:
+        """Record the builder's part after a traced change (legitimate state)."""
+        if isinstance(b, bd.BuildPart):
+            self._bsnap[id(b)] = _fingerprint(b._obj)
+
+    def _builder_intact(self, b: Any) -> bool:
+        if _same(b._obj, self._bsnap.get(id(b), _fingerprint(None))):
+            return True
+        self._tamper(id(b), "BuildPart")
+        return False
+
+    def _checked(self, obj: Any) -> Prov | None:
+        """Registered provenance of `obj`, None if untraced or its geometry was replaced."""
+        p = self._prov.get(id(obj))
+        if p is None:
+            return None
+        snap = self._wsnap.get(id(obj))
+        if snap is not None and not _same(obj, snap):
+            self._tamper(id(obj), f"traced {type(obj).__name__}")
+            return None
+        return p
+
     def _info(self, obj: Any) -> Prov | None:
         if obj is None:
             return _EMPTY
-        p = self._prov.get(id(obj))
-        if p is not None:
-            return p
+        if id(obj) in self._prov:
+            return self._checked(obj)
         if isinstance(obj, bd.BuildPart):
+            if not self._builder_intact(obj):
+                return None
             return self._builder.get(id(obj), _EMPTY)
         if isinstance(obj, (list, tuple)):
             ps = [self._info(o) for o in obj]
@@ -445,11 +512,14 @@ class Tracer:
                     tracer.depth -= 1
             user, where = tracer._user_call()
             scope = bc._get_build_scope()
+            if user and tracer._current_buildpart() is not None:
+                tracer._builder_intact(tracer._current_buildpart())
             tracer.depth += 1
             try:
                 obj = orig_call(cls, *args, **kwargs)
             finally:
                 tracer.depth -= 1
+            tracer._sync_builder(tracer._current_buildpart())
             if not user:
                 return obj
             name = cls.__name__
@@ -478,7 +548,7 @@ class Tracer:
         # operation functions
         modules = [m for m in (bd, sys.modules.get("build123d.operations_part"),
                                sys.modules.get("build123d.operations_generic")) if m]
-        for fname in list(FUNCTION_OPS) + list(TRANSFORM_OPS) + ["add"]:
+        for fname in list(FUNCTION_OPS) + list(TRANSFORM_OPS) + ["add", "insert"]:
             orig = getattr(bd, fname, None)
             if orig is None:
                 continue
@@ -530,18 +600,41 @@ class Tracer:
 
         def part_get(bp):
             res = part_prop.fget(bp)
-            if res is not None:
+            if res is not None and tracer._builder_intact(bp):
                 tracer._register(res, tracer._builder.get(id(bp), _EMPTY))
             return res
 
         self._patch(bd.BuildPart, "part", property(part_get, part_prop.fset))
+
+        wprop = bd.Shape.__dict__.get("wrapped")
+        if isinstance(wprop, property) and wprop.fset is not None:
+
+            def wrapped_set(s, value):
+                wprop.fset(s, value)
+                caller = os.path.abspath(sys._getframe(1).f_code.co_filename)
+                if id(s) in tracer._wsnap:
+                    if caller.startswith(_PKG_DIR + os.sep):
+                        tracer._wsnap[id(s)] = _fingerprint(s)  # build123d's own update
+                    else:
+                        tracer._tamper(id(s), f"traced {type(s).__name__}")
+
+            self._patch(bd.Shape, "wrapped", property(wprop.fget, wrapped_set, wprop.fdel,
+                                                      wprop.__doc__))
         orig_exit = bd.Builder.__dict__["__exit__"]
 
         def builder_exit(b, et, ev, tb):
             scope = bc._get_build_scope()
+            parent = b.builder_parent
+            if isinstance(b, bd.BuildPart) and et is None and not tracer.depth:
+                tracer._builder_intact(b)  # tampered child: reported before the transfer
+                if isinstance(parent, bd.BuildPart):
+                    tracer._builder_intact(parent)
             res = orig_exit(b, et, ev, tb)
             if isinstance(b, bd.BuildPart) and et is None and not tracer.depth:
                 tracer._buildpart_exit(b, scope)
+                tracer._sync_builder(b)
+                if isinstance(parent, bd.BuildPart):
+                    tracer._sync_builder(parent)
             return res
 
         self._patch(bd.Builder, "__exit__", builder_exit)
@@ -595,15 +688,19 @@ class Tracer:
                     else:
                         kwargs[key] = objs
                 targets = tracer._op_targets(fname, objs, kwargs, builder)
+            if user and builder is not None:
+                tracer._builder_intact(builder)  # report a tampered part before it is merged
             tracer.depth += 1
             try:
                 res = orig(*args, **kwargs)
             finally:
                 tracer.depth -= 1
+            tracer._sync_builder(builder)
             if not user:
                 return res
-            if fname == "add":
-                tracer._handle_add(args, kwargs, builder, where)
+            if fname in ("add", "insert"):
+                tracer._handle_add(args, kwargs, builder, where,
+                                   mode_pos=1 if fname == "add" else 3)
                 return res
             three_d = builder is not None or _is_3d(res)
             if not three_d:
@@ -762,11 +859,12 @@ class Tracer:
             return n_body >= 1 and n_tool > 1
         return min(n_body, n_tool) > 1
 
-    def _handle_add(self, args: tuple, kwargs: dict, builder: Any, where: str) -> None:
+    def _handle_add(self, args: tuple, kwargs: dict, builder: Any, where: str,
+                    mode_pos: int = 1) -> None:
         if builder is None:
             return
         objs = args[0] if args else kwargs.get("objects")
-        mode = kwargs.get("mode", args[1] if len(args) > 1 else bd.Mode.ADD)
+        mode = kwargs.get("mode", args[mode_pos] if len(args) > mode_pos else bd.Mode.ADD)
         if mode == bd.Mode.PRIVATE:
             return
         objs = objs if isinstance(objs, (list, tuple)) else [objs]
@@ -776,7 +874,7 @@ class Tracer:
                 continue
             p = self._info(o)
             if p is None:
-                self.unmapped.append(f"{where}: add() of an untraced 3D shape "
+                self.unmapped.append(f"{where}: add()/insert() of an untraced 3D shape "
                                      f"({type(o).__name__})")
                 continue
             body = self._builder.get(id(builder), _EMPTY)
@@ -826,7 +924,7 @@ class Tracer:
             res = orig(s, *args, **kwargs)
             if select and tracer.depth:
                 return res
-            p = tracer._prov.get(id(s))
+            p = tracer._checked(s)
             if p is None or res is s:
                 return res
             if track and not tracer.depth and _is_3d(s):
@@ -854,7 +952,7 @@ class Tracer:
 
         def wrapper(s, *args, **kwargs):
             res = orig(s, *args, **kwargs)
-            p = tracer._prov.get(id(s))
+            p = tracer._checked(s)
             if p is None or res is s:
                 return res
             if not tracer.depth:
@@ -875,7 +973,7 @@ class Tracer:
 
         def wrapper(s, other):
             res = orig(s, other)
-            p = tracer._prov.get(id(s))
+            p = tracer._checked(s)
             if p is None:
                 return res
             if isinstance(res, list) and len(res) > 1 and not tracer.depth:
