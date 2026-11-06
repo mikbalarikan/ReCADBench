@@ -47,8 +47,11 @@ adapter_cli:
   execute_ir: recad build123d execute-ir
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+# Hosts: linux (Linux x86_64, 2026-11-06) and windows (Windows 11 x64, 2026-11-06): 10/10 on both,
+# identical counts and volume errors. MCP tools/list snapshot: mcp_tools.json (48 tools,
+# checked against cad_prefixes by backends/tests/test_mcp_tools.py).
 conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: build123d 0.13.0 (OCP 8) + build123d-mcp 0.3.91, Python 3.13 (Linux x86_64)
+  software_version: build123d 0.13.0 (OCP 8, cadquery-ocp-novtk 8.0.1.1) + build123d-mcp 0.3.91, Python 3.13; hosts linux x86_64 + windows x64

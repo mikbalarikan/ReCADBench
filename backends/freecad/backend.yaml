@@ -13,7 +13,12 @@ software:
   freecad:
     version: '26.3'
     build: 26.3.0 20260916 (a4ce44d3)
-    source: conda-forge freecad=2026.09.16 python=3.11 (Linux; occt 8.0.1); FreeCAD 26.3 bundle (Windows)
+    # Windows (2026-11-06): the same conda-forge build, win-64 py311h48521fb_0 (occt 8.0.1), reports
+    # 26.3.0 20260916 a4ce44d33. Kept this pin: FreeCAD/FreeCAD has no 26.3 final release yet
+    # (26.3rc1/rc2 only), so the conda-forge 2026.09.16 build is the one reproducible 26.3 on both
+    # hosts. The official FreeCAD 1.1.1 Windows bundle also passes conformance 10/10 with identical
+    # counts, but it is not the pin.
+    source: conda-forge freecad=2026.09.16 python=3.11 (linux-64 and win-64; occt 8.0.1)
 interface:
   kind: mcp
   mcp:
@@ -58,6 +63,7 @@ interface:
     - mcp__freecad__undo
     - mcp__freecad__redo
     - mcp__freecad__recompute
+    - mcp__freecad__recompute_document  # same doc.recompute() as `recompute` (tools/documents.py)
     - mcp__freecad__open_document
     - mcp__freecad__close_document
     - mcp__freecad__save_document
@@ -77,8 +83,11 @@ adapter_cli:
   replay: recad freecad replay
 max_parallel: 2
 # Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad 0.1.0, all 3 backends).
+# Hosts: linux (Linux x86_64) and windows (Windows 11 x64, conda-forge win-64 env), both 2026-11-06:
+# 10/10, identical counts and volume errors. MCP tools/list snapshot: mcp_tools.json (83 tools,
+# freecad-robust-mcp 0.6.1 + mcp 1.30.0; serverInfo reports the mcp library version 1.30.0).
 conformance:
   passed: 10
   total: 10
   date: '2026-11-06'
-  software_version: FreeCAD 26.3 (adapter run with the conda-forge freecad Python 3.11)
+  software_version: FreeCAD 26.3.0 (conda-forge 2026.09.16, Python 3.11, occt 8.0.1); hosts linux x86_64 + windows x64
