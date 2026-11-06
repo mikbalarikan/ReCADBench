@@ -354,6 +354,9 @@ class Gate:
 
     # paths -------------------------------------------------------------------------------
     def _resolve(self, p: str) -> Path:
+        if os.name != "nt" and re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", p):
+            # a Windows drive / UNC path on a POSIX host is never inside the run dir
+            return Path("/") / "__windows_path__"
         q = Path(p)
         return q if q.is_absolute() else self.run_dir / q
 
