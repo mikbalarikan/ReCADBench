@@ -13,9 +13,10 @@ Contract (05_TOOLS "recadbench nx-run contract"):
     run_journal process started here (and its children) is killed, never NX by name;
   * stdout/stderr go to ``cad/logs/<journal>.log``; an NX syslog excerpt goes into last_run.json;
   * exit 0 if ok, 1 on any NX / journal error, 2 on usage errors. One JSON summary on stdout;
-  * before NX starts, the journal and every other .py under ``cad/`` are checked against
-    ``backends/nx/backend.yaml`` ``denied_tools`` (ADR 0004: journal code that imports or analyses
-    the scan); a match refuses the run (exit 1, ``denied: true``, part untouched).
+  * before NX starts, __pycache__ folders are purged and the journal plus every other .py in the
+    run dir and in lib/ (comments removed) are checked against ``backends/nx/backend.yaml``
+    ``denied_tools`` (ADR 0004: journal code that imports or analyses the scan); a match, or a
+    compiled / zipped module there, refuses the run (exit 1, ``denied: true``, part untouched).
 
 Environment:
   RECADBENCH_NX_RUN_JOURNAL   run_journal.exe (default: %UGII_BASE_DIR%\\NXBIN\\run_journal.exe,
@@ -204,7 +205,8 @@ def run_wrapped(
     args = [str(journal), str(part), str(result), str(ADAPTER_DIR)]
     if lib_dir is not None:
         args.append(str(lib_dir))
-    env_extra = {"RECADBENCH_NX_PART": str(part)}
+    # no bytecode caches next to checked sources (nx-run also purges them before each run)
+    env_extra = {"RECADBENCH_NX_PART": str(part), "PYTHONDONTWRITEBYTECODE": "1"}
     try:
         run = run_journal(WRAPPER, args, part.parent, timeout, env_extra)
     except NxEnvError as exc:
@@ -294,11 +296,14 @@ def denied_rules(path: Path = BACKEND_YAML) -> list[dict[str, str]]:
 
 def denied(command: str, journal_text: str, rules: list[dict[str, str]] | None = None):
     """The first denied_tools rule that matches this run (ADR 0004 matcher: `tool` is a prefix of
-    the command, `args_regex` is searched in json.dumps(arguments)), or None."""
+    the command, `args_regex` is searched in json.dumps(arguments)), or None. The journal is
+    matched without its # comments (strip_comments; pass journal_source(bytes) for a file)."""
     import re
 
     rules = denied_rules() if rules is None else rules
-    blob = json.dumps({"command": command, "journal": journal_text}, ensure_ascii=False)
+    blob = json.dumps(
+        {"command": command, "journal": strip_comments(journal_text)}, ensure_ascii=False
+    )
     for r in rules:
         if command.startswith(r["tool"]) and (
             "args_regex" not in r or re.search(r["args_regex"], blob)
@@ -307,22 +312,109 @@ def denied(command: str, journal_text: str, rules: list[dict[str, str]] | None =
     return None
 
 
+def strip_comments(text: str) -> str:
+    """Python source with its `#` comments removed (the text the deny matcher sees).
+
+    Line ends are normalised first (CPython also ends a line at a lone CR, so a comment cannot
+    hide code behind one). Strings and docstrings are kept: a docstring is reachable at run
+    time (`exec(__doc__)`), a comment is not. Source that does not tokenize is returned
+    unchanged, i.e. matched with its comments (strict)."""
+    import io
+    import tokenize
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    cut: dict[int, int] = {}
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                cut[tok.start[0]] = tok.start[1]
+    except (tokenize.TokenError, SyntaxError):
+        return text
+    lines = text.split("\n")
+    for row, col in cut.items():
+        lines[row - 1] = lines[row - 1][:col]
+    return "\n".join(lines)
+
+
+def journal_source(raw: bytes) -> str:
+    """The `journal` argument of the deny matcher for one Python file: the text Python decodes
+    from these bytes (PEP 263 coding cookie honoured, so a `coding: utf-7` file is matched as
+    Python reads it), with `#` comments removed."""
+    import io
+    import tokenize
+
+    try:
+        enc, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
+        text = raw.decode(enc, errors="replace")
+    except (SyntaxError, LookupError):
+        text = raw.decode("utf-8", errors="replace")
+    return strip_comments(text)
+
+
+# Importable code the deny regex cannot read (sourceless bytecode, extension modules, zip
+# imports). Refused anywhere in the run dir / lib (__pycache__ is purged before every run).
+OPAQUE_SUFFIXES = (".pyc", ".pyo", ".pyd", ".so", ".zip", ".egg", ".whl", ".pyz")
+OPAQUE_REASON = "compiled or packaged Python module (not checkable against denied_tools)"
+
+
+def lib_dir(run_dir: Path) -> Path | None:
+    """Folder put on the journal's sys.path: RECADBENCH_NX_LIB, else <run dir>/lib."""
+    if os.environ.get("RECADBENCH_NX_LIB"):
+        return Path(os.environ["RECADBENCH_NX_LIB"])
+    return run_dir / "lib" if (run_dir / "lib").is_dir() else None
+
+
+def _code_roots(run_dir: Path) -> list[Path]:
+    roots = [run_dir]
+    lib = lib_dir(run_dir)
+    if lib is not None and lib.is_dir() and not lib.resolve().is_relative_to(run_dir):
+        roots.append(lib.resolve())
+    return roots
+
+
+def purge_bytecode(run_dir: Path) -> None:
+    """Remove __pycache__ folders under the run dir and lib/: a planted cache .pyc (with the
+    mtime/size header of an innocent source) would run instead of the checked source."""
+    import shutil
+
+    for root in _code_roots(run_dir):
+        for d in sorted(root.rglob("__pycache__"), reverse=True):
+            if d.is_dir():
+                shutil.rmtree(d, ignore_errors=True)
+
+
 def check_journal(run_dir: Path, journal: Path, command: str) -> str | None:
-    """Reason text when the journal or another .py under cad/ (importable by the journal) is
-    denied by backend.yaml denied_tools; None when the run may start."""
-    cad = run_dir / "cad"
-    files = [journal] + sorted(p for p in cad.rglob("*.py") if p.resolve() != journal)
+    """Reason text when code the journal can import is denied by backend.yaml denied_tools;
+    None when the run may start.
+
+    Checked: the journal, then every .py anywhere in the run dir (cad/ siblings, lib/, the run
+    root, any folder a journal can put on sys.path by a literal path) and in RECADBENCH_NX_LIB
+    when that lies outside the run dir; any importable file the regex cannot read
+    (OPAQUE_SUFFIXES) refuses the run too. Code reached only through runtime-built paths or
+    exec() of a non-.py file stays a residual risk (STATUS)."""
     rules = denied_rules()
+    files = [journal]
+    for root in _code_roots(run_dir):
+        for p in sorted(root.rglob("*")):
+            if p.suffix.lower() in OPAQUE_SUFFIXES and "__pycache__" not in p.parts:
+                return f"denied: {_rel(p, run_dir)}: {OPAQUE_REASON}"
+            # .pyw is a source suffix of the import system on Windows
+            if p.suffix.lower() in (".py", ".pyw") and p.resolve() != journal and p.is_file():
+                files.append(p)
     for f in files:
         try:
-            text = f.read_text(encoding="utf-8", errors="replace")
+            text = journal_source(f.read_bytes())
         except OSError:
             continue
         hit = denied(command, text, rules)
         if hit:
-            rel = f.resolve().relative_to(run_dir).as_posix()
-            return f"denied: {rel}: {hit.get('reason', 'backend.yaml denied_tools')}"
+            return f"denied: {_rel(f, run_dir)}: {hit.get('reason', 'backend.yaml denied_tools')}"
     return None
+
+
+def _rel(p: Path, run_dir: Path) -> str:
+    p = p.resolve()
+    return p.relative_to(run_dir).as_posix() if p.is_relative_to(run_dir) else p.as_posix()
 
 
 def _write_json(path: Path, obj: dict[str, Any]) -> None:
@@ -365,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         return usage(f"no journal {journal}")
     if not part.is_relative_to(cad) or part.suffix.lower() != ".prt":
         return usage(f"part must be a .prt under {cad} (got {a.part})")
+    purge_bytecode(run_dir)
     deny = check_journal(run_dir, journal, f"{COMMAND} {a.journal}")
     if deny:
         res = {
@@ -382,11 +475,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 1
-    lib = (
-        Path(os.environ["RECADBENCH_NX_LIB"])
-        if os.environ.get("RECADBENCH_NX_LIB")
-        else (run_dir / "lib" if (run_dir / "lib").is_dir() else None)
-    )
+    lib = lib_dir(run_dir)
 
     res = run_wrapped(
         journal,

@@ -8,7 +8,9 @@ the replays never import recadbench_spec (it is not installed in NX's Python).
     name of the NX expression (``formula``), so set-param edits it;
   * ``pattern_circular``: ``angle_deg`` = TOTAL SWEEP (step = angle_deg / count, 360 = full
     circle and the default) or ``pitch_deg`` = step; at most one of the two; zero step and
-    |count * step| > 360 are errors (same as ``recadbench_spec.circular_offsets``).
+    |count * step| > 360 are errors (same as ``recadbench_spec.circular_offsets``);
+  * sketch entities and list-valued params are literals in the replays, so ``load`` rejects a
+    ``{"ref"}`` there (``check_refs_are_read``) instead of ignoring it.
 """
 
 import json
@@ -34,7 +36,40 @@ def load(path):
         raise IRError(
             f"{path}: spec_version {doc.get('spec_version')!r}, replays read {SPEC_VERSION}"
         )
+    check_refs_are_read(doc)
     return doc
+
+
+def _refs(v, path):
+    if is_ref(v):
+        yield path
+    elif isinstance(v, dict):
+        for k, x in v.items():
+            yield from _refs(x, f"{path}.{k}")
+    elif isinstance(v, list):
+        for i, x in enumerate(v):
+            yield from _refs(x, f"{path}[{i}]")
+
+
+def check_refs_are_read(doc):
+    """Raise IRError for a {"ref"} the replays would ignore.
+
+    The replays draw sketch entities and list-valued params (hole positions, polygon points) as
+    literals and read only the top-level feature params through value / formula /
+    count_formula. A ref inside a sketch or inside a list would leave that number fixed while
+    set-param edits the expression - a silent divergence - so it is an error until the replay
+    reads that value from the IR."""
+    for f in doc.get("features") or []:
+        fid = f.get("id")
+        bad = list(_refs(f.get("sketch"), "sketch"))
+        for k, v in (f.get("params") or {}).items():
+            if isinstance(v, list):
+                bad += list(_refs(v, f"params.{k}"))
+        if bad:
+            raise IRError(
+                f"feature {fid}: {{'ref'}} at {', '.join(bad)} is not read by the NX replays "
+                "(sketch entities and list values are literals there)"
+            )
 
 
 def case_path(case_id):

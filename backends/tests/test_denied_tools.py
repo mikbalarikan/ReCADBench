@@ -7,6 +7,7 @@ searched in the JSON-serialised arguments); P10's gate_hook must implement the s
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -17,6 +18,19 @@ from recadbench_spec import validate_file
 
 BACKENDS = Path(__file__).resolve().parents[1]
 MANIFESTS = sorted(BACKENDS.glob("*/backend.yaml"))
+
+_spec = importlib.util.spec_from_file_location("nx_run_deny", BACKENDS / "nx/runner/nx_run.py")
+nx_run = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(nx_run)
+
+
+def nx_args(code: str) -> dict:
+    """nx (kind cli) matcher arguments: the journal as nx_run.journal_source gives it (decoded as
+    Python decodes it, # comments removed; backends/nx/backend.yaml)."""
+    return {
+        "command": "recadbench nx-run cad/j.py",
+        "journal": nx_run.journal_source(code.encode("utf-8")),
+    }
 
 
 def denied(manifest: dict, tool: str, args: dict) -> bool:
@@ -109,12 +123,23 @@ CASES = [
     ("build123d", "mcp__build123d__execute", {"code": "import trimesh\nm = trimesh.load(p)"},
      True),
     ("build123d", "mcp__build123d__execute", {"code": 's = import_step("scan.stl")'}, True),
-    # nx (kind cli): tool = the command line, arguments = {command, journal source text}
-    # (backends/nx/backend.yaml; recadbench nx-run enforces the same rule before NX starts).
+    # nx (kind cli): tool = the command line, arguments = {command, journal source without
+    # comments} (backends/nx/backend.yaml; recadbench nx-run enforces the same rule before NX
+    # starts).
     *[
-        ("nx", "recadbench nx-run cad/j.py",
-         {"command": "recadbench nx-run cad/j.py", "journal": code}, expect)
+        ("nx", "recadbench nx-run cad/j.py", nx_args(code), expect)
         for code, expect in [
+            # H4 fixer 3: the words in COMMENTS no longer refuse a journal ...
+            ("# no Convergent bodies here; solid features only\nimport NXOpen\n", False),
+            ("# read params from the IR, never from input/ (the scan)\nx = 1\n", False),
+            ("# do not use FitSurface\nnxf.edge_blend(part, chains)\n", False),
+            ("x = 1  # not NXOpen.Facet, not import trimesh\n", False),
+            # ... but code, strings and docstrings still do, and a comment cannot hide code
+            ('"""import trimesh"""\nexec(__doc__)\n', True),
+            ("s = '# NXOpen.Facet'\n", True),
+            ("# harmless\rimport trimesh\n", True),  # CPython ends the line at a lone CR
+            ("x = 1 # c\nb = part.Features.CreateFitSurfaceBuilder(NF)\n", True),
+            ("def f(:\n    # FitSurface\n", True),  # does not tokenize: matched as is
             ("import NXOpen, NXOpen.Facet\nb = part.FacetedBodies.CreateSTLImportBuilder()", True),
             ("from NXOpen import Features, Facet", True),
             ("x = 1\nb2.File = 'input/input.stl'", True),

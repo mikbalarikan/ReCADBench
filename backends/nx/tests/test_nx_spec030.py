@@ -58,6 +58,36 @@ def test_ir_loader_rejects_other_spec_versions(tmp_path):
         IR.load(str(p))
 
 
+def _c05_with(tmp_path, mutate):
+    doc = json.loads((CASES / "C05_rect_pattern" / "re_plan.v1.json").read_text(encoding="utf-8"))
+    mutate(doc)
+    p = tmp_path / "re_plan.v1.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def _sketch_ref(doc):
+    doc["parameters"].append({"name": "plate_w", "value": 60.0})
+    doc["features"][0]["sketch"]["entities"][0]["width"] = {"ref": "plate_w"}
+
+
+def _position_ref(doc):
+    doc["features"][1]["params"]["positions"][0][2] = {"ref": "plate_t"}
+
+
+@pytest.mark.parametrize("mutate", [_sketch_ref, _position_ref], ids=["sketch", "positions"])
+def test_ir_loader_rejects_refs_the_replays_do_not_read(tmp_path, mutate):
+    # H4 fixer 3 (review): the replays draw sketches / positions as literals; a 0.3.0 sketch
+    # {"ref"} there was ignored silently (set-param would not move that number)
+    with pytest.raises(IR.IRError, match=r"F[12]: .*(sketch|positions)"):
+        IR.load(_c05_with(tmp_path, mutate))
+
+
+def test_ir_loader_keeps_top_level_param_refs(tmp_path):
+    doc = IR.load(_c05_with(tmp_path, lambda d: None))
+    assert doc["features"][0]["params"]["distance"] == {"ref": "plate_t"}
+
+
 DOC = {
     "parameters": [
         {"name": "n", "value": 4},
@@ -156,6 +186,87 @@ def test_nx_run_refuses_a_journal_whose_sibling_module_imports_the_scan(tmp_path
     (tmp_path / "cad" / "main.py").write_text("import helper\n", encoding="utf-8")
     rc, res = _run_cli(tmp_path, "cad/main.py")
     assert rc == 1 and res["denied"] and "cad/helper.py" in res["error"], res
+
+
+SCANHELP = (
+    "def bbox(path):\n"
+    "    import struct\n"
+    "    pts = [l.split()[1:] for l in open(path) if l.strip().startswith('vertex')]\n"
+    "    return pts\n"
+    "B = bbox('input/input.stl')\n"
+)
+
+
+def test_nx_run_refuses_a_lib_module_that_reads_the_scan(tmp_path):
+    # H4 fixer 3 (review): lib/ is on the journal's sys.path; old code scanned cad/ only
+    (tmp_path / "cad").mkdir()
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "input.stl").write_text("solid s\nendsolid s\n", encoding="utf-8")
+    (tmp_path / "lib" / "scanhelp.py").write_text(SCANHELP, encoding="utf-8")
+    (tmp_path / "cad" / "j.py").write_text("import scanhelp\nw = scanhelp.B\n", encoding="utf-8")
+    rc, res = _run_cli(tmp_path, "cad/j.py")
+    assert rc == 1 and res["denied"] and "lib/scanhelp.py" in res["error"], res
+    assert not (tmp_path / "cad" / "part.prt").exists()
+
+
+@pytest.mark.parametrize(
+    "rel",
+    ["scanhelp.py", "tools/deep/scanhelp.py", "lib/pkg/__init__.py", "cad/sub/scanhelp.pyw"],
+)
+def test_any_py_in_the_run_dir_is_checked(tmp_path, rel):
+    (tmp_path / "cad").mkdir()
+    p = tmp_path / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(FACET, encoding="utf-8")
+    j = tmp_path / "cad" / "j.py"
+    j.write_text("import sys\nsys.path.insert(0, '..')\nimport scanhelp\n", encoding="utf-8")
+    hit = nx_run.check_journal(tmp_path.resolve(), j.resolve(), "recadbench nx-run cad/j.py")
+    assert hit and rel in hit, hit
+
+
+def test_nx_lib_outside_the_run_dir_is_checked(tmp_path, monkeypatch):
+    run, lib = tmp_path / "run", tmp_path / "elsewhere" / "lib"
+    (run / "cad").mkdir(parents=True)
+    lib.mkdir(parents=True)
+    (lib / "scanhelp.py").write_text(FACET, encoding="utf-8")
+    j = run / "cad" / "j.py"
+    j.write_text("import scanhelp\n", encoding="utf-8")
+    monkeypatch.setenv("RECADBENCH_NX_LIB", str(lib))
+    hit = nx_run.check_journal(run.resolve(), j.resolve(), "recadbench nx-run cad/j.py")
+    assert hit and "scanhelp.py" in hit, hit
+
+
+@pytest.mark.parametrize("name", ["lib/scanhelp.pyc", "lib/scan.zip", "cad/fast.pyd"])
+def test_opaque_modules_refuse_the_run(tmp_path, name):
+    (tmp_path / "cad").mkdir()
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"\x00\x01")
+    (tmp_path / "cad" / "j.py").write_text("x = 1\n", encoding="utf-8")
+    rc, res = _run_cli(tmp_path, "cad/j.py")
+    assert rc == 1 and res["denied"] and name in res["error"], res
+
+
+def test_pycache_is_purged_before_the_check(tmp_path):
+    (tmp_path / "cad").mkdir()
+    cache = tmp_path / "lib" / "nxhelpers" / "__pycache__"
+    cache.mkdir(parents=True)
+    (cache / "nxh.cpython-310.pyc").write_bytes(b"\x00")
+    nx_run.purge_bytecode(tmp_path.resolve())
+    assert not cache.exists()
+
+
+def test_comments_do_not_refuse_but_a_coding_cookie_cannot_hide_code(tmp_path):
+    ok = "# no Convergent bodies, never FitSurface, never input/ (the scan)\nx = 1\n"
+    assert nx_run.denied("recadbench nx-run cad/j.py", nx_run.journal_source(ok.encode())) is None
+    # utf-7: Python decodes '+AGk-mport trimesh' as 'import trimesh'
+    raw = b"# -*- coding: utf-7 -*-\n+AGk-mport trimesh\n"
+    assert nx_run.denied("recadbench nx-run cad/j.py", nx_run.journal_source(raw))
+    (tmp_path / "cad").mkdir()
+    (tmp_path / "cad" / "j.py").write_bytes(raw)
+    j = (tmp_path / "cad" / "j.py").resolve()
+    assert nx_run.check_journal(tmp_path.resolve(), j, "recadbench nx-run cad/j.py")
 
 
 def test_ordinary_journals_pass_the_check(tmp_path):

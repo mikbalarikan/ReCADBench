@@ -32,9 +32,13 @@ adapter_cli:
 # ADR 0004: journal code that imports or analyses the scan inside NX is denied (RE analysis goes
 # through retk, identical for every backend). kind cli: `tool` = prefix of the command; the
 # arguments the matcher sees are {"command": <command line>, "journal": <source text of the
-# journal>} (json.dumps: a line break is the two characters backslash, n). `recadbench nx-run`
-# enforces this list itself before NX starts, on the journal and on every other .py under cad/ (a journal
-# can import its siblings), and refuses the run (exit 1, last_run.json error "denied: ...").
+# journal with its # comments removed, decoded as Python decodes it: nx_run.journal_source>}
+# (json.dumps: a line break is the two characters backslash, n). Words in comments therefore do
+# not refuse a run; words in strings and docstrings do (a docstring is reachable via __doc__).
+# `recadbench nx-run` enforces this list itself before NX starts, on the journal and on every
+# other .py in the run dir and in lib/ (all importable by the journal), refuses compiled /
+# zipped modules there and purges __pycache__, and refuses the run (exit 1, last_run.json error
+# "denied: ...").
 # The regex is BEST-EFFORT on free-form code: it matches NXOpen.Facet / faceted bodies, convergent
 # bodies, Fit Surface, STL/OBJ/PLY/3MF import builders and importers, mesh libraries, a load call
 # or File property on a mesh-file literal and any reference to the workspace input/ folder. Code

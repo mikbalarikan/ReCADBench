@@ -38,12 +38,16 @@ recadbench nx-run cad/step_01.py     # [--timeout 120] [--part cad/part.prt]
   by the wrapper from the NX session (the same counter as `recad nx extract`), never self-reported.
 - stdout/stderr of run_journal go to `cad/logs/<journal>.log`. stdout of `nx-run` is one JSON
   summary. Exit 0 = ok, 1 = NX / journal error or timeout, 2 = usage error.
-- **Denied journals (ADR 0004).** Before NX starts, the journal and every other `.py` under
-  `cad/` (importable by the journal) are matched against `backend.yaml` `denied_tools`
-  (`tool: recadbench nx-run`, `args_regex` searched in `json.dumps({"command", "journal"})`):
-  journal code that imports or analyses the scan inside NX (NXOpen.Facet / faceted bodies,
-  convergent bodies, Fit Surface, STL/OBJ/PLY/3MF import, mesh libraries, the workspace `input/`
-  folder) is refused, exit 1, `denied: true`, the part untouched. Best-effort on free-form code;
+- **Denied journals (ADR 0004).** Before NX starts, `__pycache__` folders are purged and the
+  journal plus every other `.py` / `.pyw` anywhere in the run dir (cad/, lib/, the run root, any
+  subfolder) and in `RECADBENCH_NX_LIB` are matched against `backend.yaml` `denied_tools`
+  (`tool: recadbench nx-run`, `args_regex` searched in `json.dumps({"command", "journal"})`,
+  journal = source decoded as Python decodes it, `#` comments removed; strings and docstrings
+  still count): journal code that imports or analyses the scan inside NX (NXOpen.Facet /
+  faceted bodies, convergent bodies, Fit Surface, STL/OBJ/PLY/3MF import, mesh libraries, the
+  workspace `input/` folder) is refused, exit 1, `denied: true`, the part untouched; so is any
+  compiled or zipped module there (`.pyc .pyo .pyd .so .zip .egg .whl .pyz`). Best-effort on
+  free-form code (runtime-built names / paths, `exec` of a non-.py file are not caught);
   `extract` still reports facet / convergent / imported bodies as unmapped.
 - Timeout default 120 s (`--timeout`, `RECADBENCH_NX_TIMEOUT_S`); only the run_journal process
   started here (and its child processes) is killed, never NX by name.
@@ -98,7 +102,9 @@ sketch's own datum CSYS, `MASTER SNAPSHOT BODY`) are not history steps and are s
 - Replays read their spec 0.3.0 IR (`replays/_ir.py`, no NXOpen): every IR parameter becomes a
   named expression, `{"ref"}` numbers become expression names in formulas, and
   `pattern_circular` follows ADR 0004 (`angle_deg` = total sweep: 360 -> NX Span 360, partial
-  sweep -> Offset pitch `angle_deg / count`; `pitch_deg` -> Offset pitch).
+  sweep -> Offset pitch `angle_deg / count`; `pitch_deg` -> Offset pitch). Sketch entities and
+  list-valued params (hole positions, polygon points) are literals in the replays, so
+  `_ir.load` rejects a `{"ref"}` there (IRError) instead of ignoring it.
 - Conformance C09: NX's Mirror Feature of a body-creating extrude yields a second body, so the
   replay unites it; that Unite merges one feature (the mirror) and is folded. Count 3 as on every
   backend.
