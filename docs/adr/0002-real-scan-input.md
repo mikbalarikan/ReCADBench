@@ -105,12 +105,12 @@ tasks.
 | Part(s) | Scan | GT | `gt_author` | Contamination | Notes |
 |---|---|---|---|---|---|
 | R385 ×8 (HS01–HS04, SL01–SL03, DR02) | owner's, private | owner's NX `.prt` + `.stp` | `human` | `commercial_replica` | pilots for P6; frames/scans being checked on the desktop |
-| OOM-B02 side brush | original full-res on Drive (repo has a cleaned mesh) | build123d + NX, verdict APPROVED | `agent_human_reviewed` | `commercial_replica` | |
-| OOM-P03 mop-pad bracket | full-res on Drive (repo: decimated) | build123d + NX, APPROVED | `agent_human_reviewed` | `commercial_replica` | |
-| Dreame screw cap, snap cap | full-res on Drive (repo: decimated) | build123d + NX, gates PASS | `agent_human_reviewed` | `commercial_replica` | 2 parts |
+| GE-01 (golden example, client part) | original full-res on Drive (repo has a cleaned mesh) | build123d + NX, verdict APPROVED | `agent_human_reviewed` | `commercial_replica` | |
+| GE-02 (golden example, client part) | full-res on Drive (repo: decimated) | build123d + NX, APPROVED | `agent_human_reviewed` | `commercial_replica` | |
+| GE-03, GE-04 (golden examples, client parts) | full-res on Drive (repo: decimated) | build123d + NX, gates PASS | `agent_human_reviewed` | `commercial_replica` | 2 parts |
 | OD-H12 Dedica/ULKA pump | same scan as open-dedica OD-H01 (**public**) | build123d + NX, band not met (p95 0.448) | `agent_human_reviewed` | `public_scan`, `commercial_replica` | calibration-grade only |
 | M02-02-03 compound gear | `M02-02-03.STL` (179k faces, not watertight) | build123d `model.py` | `agent_human_reviewed` | to confirm | provenance of the mesh to confirm |
-| OOM-E01 battery | — | — | — | — | stub, excluded |
+| GE-05 (golden example stub) | — | — | — | — | stub, excluded |
 
 Caveat: the `stl-re-*` skills were distilled from these golden projects, so a strategy/skillset ported
 from them (P8/P9) has seen these parts. That is acceptable for dev, and it is another reason none of

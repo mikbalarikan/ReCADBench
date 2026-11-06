@@ -1,0 +1,120 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C06_circ_pattern",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "disk with 6-hole bolt circle",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    },
+    {
+      "id": "D2",
+      "role": "secondary",
+      "kind": "axis",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "basis": "main axis (Z)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "plate_t",
+      "value": 10.0
+    },
+    {
+      "name": "hole_d",
+      "value": 6.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "D1",
+        "entities": [
+          {
+            "kind": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 30
+          }
+        ]
+      },
+      "params": {
+        "distance": {
+          "ref": "plate_t"
+        },
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "type": "hole",
+      "operation": "cut",
+      "params": {
+        "diameter": {
+          "ref": "hole_d"
+        },
+        "through": true,
+        "kind": "simple",
+        "positions": [
+          [
+            20,
+            0,
+            10
+          ]
+        ]
+      },
+      "refs": [
+        "F1:plane:+Z:max"
+      ]
+    },
+    {
+      "id": "F3",
+      "type": "pattern_circular",
+      "params": {
+        "features": [
+          "F2"
+        ],
+        "axis": "D2",
+        "count": 6,
+        "angle_deg": 360
+      }
+    }
+  ]
+}

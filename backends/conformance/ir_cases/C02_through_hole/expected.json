@@ -1,0 +1,17 @@
+{
+  "case": "C02_through_hole",
+  "volume_mm3": 22429.2037,
+  "volume_source": "analytic",
+  "faces": 7,
+  "feature_count": 2,
+  "features": [
+    "extrude",
+    "hole"
+  ],
+  "set_param": {
+    "name": "hole_d",
+    "value": 12.0,
+    "volume_mm3": 21738.0533
+  },
+  "tolerance_rel": 0.001
+}

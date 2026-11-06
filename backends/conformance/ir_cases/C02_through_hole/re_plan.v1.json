@@ -1,0 +1,87 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C02_through_hole",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "block with through hole",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "hole_d",
+      "value": 10.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "D1",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              0,
+              0
+            ],
+            "width": 40,
+            "height": 30
+          }
+        ]
+      },
+      "params": {
+        "distance": 20,
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "type": "hole",
+      "operation": "cut",
+      "params": {
+        "diameter": {
+          "ref": "hole_d"
+        },
+        "through": true,
+        "kind": "simple",
+        "positions": [
+          [
+            0,
+            0,
+            20
+          ]
+        ]
+      },
+      "refs": [
+        "F1:plane:+Z:max"
+      ]
+    }
+  ]
+}

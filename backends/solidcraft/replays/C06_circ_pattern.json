@@ -1,0 +1,14 @@
+{
+  "description": "ReCADBench conformance replay C06_circ_pattern: disk R30 x `plate_t`; seed hole d=`hole_d` at (20,0); circular pattern of the seed feature, 6 over 360 deg about world Z",
+  "ir": "backends/conformance/ir_cases/C06_circ_pattern/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "plate_t", "expression": "10 mm"}},
+    {"command": "parameters.add", "params": {"name": "hole_d", "expression": "6 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.circle.center", "params": {"center": [0, 0], "radius": 30}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": "plate_t", "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.hole", "params": {"position": [20, 0, "plate_t"], "diameter": "hole_d", "type": "simple"}, "ir": "F2"},
+    {"command": "solid.pattern.circular", "params": {"features": ["Hole1"], "axis": "Z", "count": 6, "angle": "360 deg"}, "ir": "F3"}
+  ]
+}

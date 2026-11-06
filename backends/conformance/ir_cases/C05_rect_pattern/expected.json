@@ -1,0 +1,18 @@
+{
+  "case": "C05_rect_pattern",
+  "volume_mm3": 18257.5222,
+  "volume_source": "analytic",
+  "faces": 12,
+  "feature_count": 3,
+  "features": [
+    "extrude",
+    "hole",
+    "pattern_linear"
+  ],
+  "set_param": {
+    "name": "hole_d",
+    "value": 6.0,
+    "volume_mm3": 17842.832
+  },
+  "tolerance_rel": 0.001
+}

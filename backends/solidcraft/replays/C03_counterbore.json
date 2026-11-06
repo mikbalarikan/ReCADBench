@@ -1,0 +1,12 @@
+{
+  "description": "ReCADBench conformance replay C03_counterbore: block 40x40x20; one counterbore hole d6 through, cb d12 x `cb_depth` (native counterbore hole = 1 feature)",
+  "ir": "backends/conformance/ir_cases/C03_counterbore/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "cb_depth", "expression": "5 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [20, 20]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": 20, "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.hole", "params": {"position": [0, 0, 20], "diameter": 6, "type": "counterbore", "cb_diameter": 12, "cb_depth": "cb_depth"}, "ir": "F2"}
+  ]
+}

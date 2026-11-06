@@ -1,0 +1,18 @@
+{
+  "case": "C07_fillet_chamfer",
+  "volume_mm3": 23274.5014,
+  "volume_source": "reference build123d replay (analytic cross-check: 40*30*20 - [2(L+W)r^2(1-pi/4) - 4r^3(5/3-pi/2)] - [d^2(L+W) - 4d^3/3] = 23274.5014 for mitred corners with sharp vertical edges; a kernel that blends the 4 top corners differently deviates only inside 4 r^3 corner cells)",
+  "faces": 14,
+  "feature_count": 3,
+  "features": [
+    "extrude",
+    "fillet",
+    "chamfer"
+  ],
+  "set_param": {
+    "name": "fillet_r",
+    "value": 5.0,
+    "volume_mm3": 23027.4954
+  },
+  "tolerance_rel": 0.001
+}

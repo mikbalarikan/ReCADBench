@@ -9,4 +9,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "dataset/tests"]
+# backends: dispatcher + build123d adapter run here; FreeCAD / SolidCraft adapter tests need their
+# own environments (backends/freecad/install.md, backends/solidcraft/install.md) and skip without.
+testpaths = ["spec/tests", "evaluator/tests", "runner/tests", "dataset/tests",
+             "backends/tests", "backends/build123d/tests"]

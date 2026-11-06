@@ -1,0 +1,16 @@
+{
+  "case": "C01_block",
+  "volume_mm3": 24000,
+  "volume_source": "analytic",
+  "faces": 6,
+  "feature_count": 1,
+  "features": [
+    "extrude"
+  ],
+  "set_param": {
+    "name": "height",
+    "value": 25.0,
+    "volume_mm3": 30000
+  },
+  "tolerance_rel": 0.001
+}

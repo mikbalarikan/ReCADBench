@@ -1,0 +1,15 @@
+{
+  "description": "ReCADBench conformance replay C04_revolve_groove: P_xz = XZ flipped (normal -Y, sketch y = world +Z); rect x0..10, y0..`shaft_len` revolved about world Z; groove rect x8..12, y28..32 revolved as a cut",
+  "ir": "backends/conformance/ir_cases/C04_revolve_groove/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "shaft_len", "expression": "60 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XZ", "flip": true}},
+    {"command": "sketch.rectangle.two_point", "params": {"p0": [0, 0], "p1": [10, "shaft_len"]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.revolve", "params": {"axis": "Z", "angle": "360 deg"}, "ir": "F1"},
+    {"command": "sketch.create", "params": {"plane": "XZ", "flip": true}},
+    {"command": "sketch.rectangle.two_point", "params": {"p0": [8, 28], "p1": [12, 32]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.revolve", "params": {"axis": "Z", "angle": "360 deg", "operation": "cut"}, "ir": "F2"}
+  ]
+}

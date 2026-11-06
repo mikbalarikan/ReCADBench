@@ -1,0 +1,12 @@
+{
+  "description": "ReCADBench conformance replay C08_shell: block 40x30x20 shelled inward by `wall_t`, top face removed",
+  "ir": "backends/conformance/ir_cases/C08_shell/re_plan.v1.json",
+  "commands": [
+    {"command": "parameters.add", "params": {"name": "wall_t", "expression": "2 mm"}},
+    {"command": "sketch.create", "params": {"plane": "XY"}},
+    {"command": "sketch.rectangle.center", "params": {"center": [0, 0], "corner": [20, 15]}},
+    {"command": "sketch.finish", "params": {}},
+    {"command": "solid.extrude", "params": {"distance": 20, "direction": "positive"}, "ir": "F1"},
+    {"command": "solid.shell", "params": {"faces": [[0, 0, 20]], "thickness": "wall_t", "direction": "inside"}, "ir": "F2"}
+  ]
+}

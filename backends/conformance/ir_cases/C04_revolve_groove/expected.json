@@ -1,0 +1,17 @@
+{
+  "case": "C04_revolve_groove",
+  "volume_mm3": 18397.1666,
+  "volume_source": "analytic",
+  "faces": 7,
+  "feature_count": 2,
+  "features": [
+    "revolve",
+    "revolve"
+  ],
+  "set_param": {
+    "name": "shaft_len",
+    "value": 70.0,
+    "volume_mm3": 21538.7592
+  },
+  "tolerance_rel": 0.001
+}

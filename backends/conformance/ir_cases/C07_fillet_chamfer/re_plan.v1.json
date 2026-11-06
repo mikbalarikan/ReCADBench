@@ -1,0 +1,89 @@
+{
+  "spec_version": "0.2.0",
+  "part_id": "C07_fillet_chamfer",
+  "revision": 1,
+  "units": "mm",
+  "part_family": "block with filleted top edges and chamfered bottom edges",
+  "datums": [
+    {
+      "id": "D1",
+      "role": "primary",
+      "kind": "plane",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "x_dir": [
+        1,
+        0,
+        0
+      ],
+      "basis": "bottom face (z = 0)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "fillet_r",
+      "value": 4.0
+    },
+    {
+      "name": "chamfer_d",
+      "value": 2.0
+    }
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "type": "extrude",
+      "operation": "new",
+      "sketch": {
+        "plane": "D1",
+        "entities": [
+          {
+            "kind": "rect",
+            "center": [
+              0,
+              0
+            ],
+            "width": 40,
+            "height": 30
+          }
+        ]
+      },
+      "params": {
+        "distance": 20,
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "type": "fillet",
+      "params": {
+        "radius": {
+          "ref": "fillet_r"
+        },
+        "edges": "F1:plane:+Z:max"
+      }
+    },
+    {
+      "id": "F3",
+      "type": "chamfer",
+      "params": {
+        "distance": {
+          "ref": "chamfer_d"
+        },
+        "edges": "F1:plane:-Z:min"
+      }
+    }
+  ]
+}
