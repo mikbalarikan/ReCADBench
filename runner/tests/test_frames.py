@@ -82,7 +82,8 @@ def test_map_plan_known_answers():
     assert f["F1"]["params"]["direction"] == [1.0, 0.0, 0.0]
     assert f["F1"]["sketch"] == plan["features"][0]["sketch"]   # sketch coords are local
     assert f["F2"]["params"]["positions"] == [[-20.0, 5.0, -30.0], [-20.0, 15.0, -30.0]]
-    assert f["F2"]["refs"] == ["F1:plane:-Y:max"]                # +X -> R^T e_x = -Y
+    # +X -> R^T e_x = -Y; y = -x, so the max-x face is the min-y face
+    assert f["F2"]["refs"] == ["F1:plane:-Y:min"]
     assert f["F3"]["params"]["axis"] == [0.0, -1.0, 0.0]
     assert f["F3"]["params"]["count"] == {"ref": "n"}
     assert f["F4"]["params"]["center"] == [-20.0, 10.0, -30.0]
@@ -107,8 +108,75 @@ def test_selector_off_axis_keeps_meaning_in_note():
     assert f2["refs"] == ["F1:plane:any:any"]
     assert "direction +X of the reference frame" in f2["evidence"]["note"]
     assert len(notes) == 1 and notes[0].startswith("F2:")
-    assert map_selector(T, "F1:plane:+Z:max:2") == ("F1:plane:+Z:max:2", None)
+    # a face index cannot survive a rotation (the executors sort by world X, Y, Z)
+    sel, vec = map_selector(T, "F1:plane:+Z:max:2")
+    assert sel == "F1:plane:any:any" and vec == pytest.approx([0.0, 0.0, 1.0])
     assert map_selector(T, "F1:cylinder:axis:any") == ("F1:cylinder:axis:any", None)
+    # a pure translation keeps everything, the index included
+    Tt = [[1.0, 0, 0, 5.0], [0, 1.0, 0, -3.0], [0, 0, 1.0, 2.0], [0, 0, 0, 1.0]]
+    assert map_selector(Tt, "F1:plane:+Z:max:2") == ("F1:plane:+Z:max:2", None)
+
+
+# ------------------------------------------------- selectors resolved like the executors do
+def _faces_gt():
+    """A stepped block: plane faces (normal, centre). Two +Z faces at z = 8 and z = 4, one -Z
+    face at z = 0, four +Z pads on a ring (for the index test)."""
+    faces = [((0, 0, 1), (5, 0, 8)), ((0, 0, 1), (-5, 0, 4)), ((0, 0, -1), (0, 0, 0)),
+             ((1, 0, 0), (10, 0, 4)), ((-1, 0, 0), (-10, 0, 2))]
+    return faces
+
+
+def _pick(faces, sel):
+    """The executors' rule (b3d_ir._sel): faces whose normal is the signed world axis, the one
+    with the max / min world coordinate on that axis; ':n' indexes after sorting by (X, Y, Z)."""
+    parts = sel.split(":")
+    d, ext = parts[2], parts[3]
+    i = "XYZ".index(d[1])
+    want = [0.0, 0.0, 0.0]
+    want[i] = 1.0 if d[0] == "+" else -1.0
+    cand = [c for n, c in faces if all(abs(a - b) < 1e-9 for a, b in zip(n, want, strict=True))]
+    if len(parts) == 5:
+        return sorted(cand)[int(parts[4])]
+    return (max if ext == "max" else min)(cand, key=lambda c: c[i])
+
+
+def _move(T, faces):
+    from recadbench_run.frames import apply_point, apply_vector, as_matrix
+
+    M = as_matrix(T)
+    return [(tuple(round(x, 9) for x in apply_vector(M, list(n))),
+             tuple(round(x, 9) for x in apply_point(M, list(c)))) for n, c in faces]
+
+
+@pytest.mark.parametrize("sel", ["BODY:plane:+Z:max", "BODY:plane:+Z:min", "BODY:plane:+X:max",
+                                 "BODY:plane:-X:min", "BODY:plane:-Z:max"])
+@pytest.mark.parametrize("axis,deg", [([1, 0, 0], 180), ([0, 1, 0], 90), ([0, 0, 1], 90),
+                                      ([1, 0, 0], 90), ([0, 1, 0], -90)])
+def test_mapped_selector_picks_the_same_face(sel, axis, deg):
+    """Regression (review H8): '+Z:max' under a sign flip became '-Z:max' (the wrong face)."""
+    T = rotation_about(axis, deg)
+    gt = _faces_gt()
+    moved = _move(T, gt)
+    intended = dict(zip([c for _, c in gt], [c for _, c in moved], strict=True))[_pick(gt, sel)]
+    new, vec = map_selector(T, sel)
+    assert vec is None
+    assert _pick(moved, new) == intended, (sel, new)
+
+
+def test_face_index_is_dropped_under_rotation():
+    """Regression (review H8): ':n' kept under Rz(30) picked another pad."""
+    pads = [((0, 0, 1), (10 * math.cos(math.radians(a)), 10 * math.sin(math.radians(a)), 3))
+            for a in (30, 120, 210, 300)]
+    T = rotation_about([0, 0, 1], 30)
+    # the kept index would pick another pad: sorted order differs after the rotation
+    moved = _move(T, pads)
+    where = dict(zip([c for _, c in pads], [c for _, c in moved], strict=True))
+    assert where[_pick(pads, "B:plane:+Z:max:2")] != _pick(moved, "B:plane:+Z:max:2")
+    new, vec = map_selector(T, "BODY:plane:+Z:max:2")
+    assert new == "BODY:plane:any:any" and vec is not None
+    m, notes = map_plan({**gt_plan(), "features": [{**gt_plan()["features"][1],
+                                                     "refs": ["F1:plane:+Z:max:2"]}]}, T)
+    assert "face index :2 dropped" in m["features"][0]["evidence"]["note"]
 
 
 def test_rejects_non_rigid():

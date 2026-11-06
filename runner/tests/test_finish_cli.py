@@ -10,6 +10,7 @@ import pytest
 from recadbench_run.cli import main
 from recadbench_run.compose import ComposeRequest, compose
 from recadbench_run.finish import finish
+from recadbench_run.gate_hook import Gate
 from runner_helpers import content_repos, plan_doc
 
 BOX = ("from build123d import BuildPart, BuildSketch, Plane, Rectangle, extrude\n"
@@ -32,6 +33,8 @@ def run(tmp_path, no_gt_env):
 def test_finish_extracts_exports_and_hashes(run):
     pytest.importorskip("build123d")
     (run / "cad" / "part.py").write_text(BOX, encoding="utf-8", newline="\n")
+    # finish extracts only a source the gate saw executed (review H8 blocker)
+    assert Gate(run)("mcp__build123d__execute_file", {"path": "cad/part.py"}).allow
     (run / "out" / "output.step").write_text("agent self-report", encoding="utf-8")
     (run / "out" / "features.json").write_text("{}", encoding="utf-8")
     res = finish(run, efficiency={"turns": 3, "tokens_in": 10})

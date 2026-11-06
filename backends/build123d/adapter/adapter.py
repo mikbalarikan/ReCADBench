@@ -69,11 +69,24 @@ def run_script(path: str, source: str | None = None, trace: bool = False):
     def show(*objs, **_kw):
         shown.extend(o for o in objs if o is not None)
 
-    g = {"__name__": "__recad_native__", "__file__": path, "__builtins__": __builtins__,
+    sandbox = os.environ.get("RECAD_SANDBOX") == "1"
+    bi = __builtins__
+    if sandbox:  # recadbench finish: agent-written code (b3d_sandbox.py)
+        from b3d_sandbox import SandboxError, check_source, restricted_builtins
+
+        try:
+            check_source(src, path)
+        except SandboxError as exc:
+            raise RunError(f"sandbox: {exc}") from exc
+        bi = restricted_builtins()
+    g = {"__name__": "__recad_native__", "__file__": path, "__builtins__": bi,
          "show": show, "show_object": show}
     code = compile(src, path, "exec")
     script_dir = os.path.dirname(path)
-    sys.path.insert(0, script_dir)
+    # sandbox: the native file is self-contained, nothing next to it is importable
+    inserted = None if sandbox else script_dir
+    if inserted:
+        sys.path.insert(0, inserted)
     before = set(sys.modules)
     stdout = io.StringIO()
     try:
@@ -87,7 +100,7 @@ def run_script(path: str, source: str | None = None, trace: bool = False):
         raise RunError(f"native script failed: {type(exc).__name__}: {exc}\n"
                        f"{traceback.format_exc(limit=6)}") from exc
     finally:
-        if sys.path and sys.path[0] == script_dir:
+        if inserted and sys.path and sys.path[0] == inserted:
             sys.path.pop(0)
         if stdout.getvalue():
             log(stdout.getvalue().rstrip())

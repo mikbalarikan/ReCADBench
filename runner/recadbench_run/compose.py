@@ -41,13 +41,15 @@ import yaml
 
 from . import __version__
 from .budgets import Budgets
-from .gate_hook import BACKEND_FILE, GATE_FILE, STATE_DIR, load_policy
+from .gate_hook import BACKEND_FILE, GATE_FILE, STATE_DIR, clear_digest, load_policy
 from .sources import Source, SourceError, default_tag_ref
 
 SKILLSET_RE = re.compile(r"^(?P<b>[a-z0-9]+)@(?P<v>v[0-9]+)$")
 BACKENDS = ("nx", "build123d", "solidcraft", "freecad")
-DEFAULT_HARNESS = "H3"
+DEFAULT_HARNESS = "H1"  # 04_STRATEGIES: H1 is the default level
 SECRET_ENV = ("RECADBENCH_GT_DIR", "RECADBENCH_GH_TOKEN", "RECADBENCH_QUEUE_TOKEN")
+DEFAULT_MODEL = ("claude-sonnet-5-5", "anthropic")
+REPLAY = "replay"
 
 
 class ComposeError(RuntimeError):
@@ -63,8 +65,8 @@ class ComposeRequest:
     backend: str | None = None
     track: str | None = None
     harness_level: str = DEFAULT_HARNESS
-    model: str = "claude-sonnet-5-5"
-    provider: str = "anthropic"
+    model: str | None = None  # default DEFAULT_MODEL; "replay" for the replay backend
+    provider: str | None = None
     agent_backend: str = "claude_agent_sdk"
     replicate: int = 0
     run_id: str | None = None
@@ -100,6 +102,23 @@ def _validate(doc: Any, schema: str, what: str) -> None:
     if not rep.ok:
         raise ComposeError(f"{what} is not valid ({schema}): "
                            + "; ".join(f"{e.path} {e.message}" for e in rep.errors[:4]))
+
+
+def resolve_model(req: ComposeRequest) -> None:
+    """Fill model / provider. A replay run (scripted, no model) is always labelled
+    ``replay`` / ``replay`` (run_id, manifest, result.json), so it can never pass for a model's
+    run; any other model name with the replay backend is refused."""
+    if req.agent_backend == REPLAY:
+        for what, v in (("--model", req.model), ("--provider", req.provider)):
+            if v not in (None, REPLAY):
+                raise ComposeError(f"{what} {v} with --agent-backend replay: a replay run has no "
+                                   "model (it is labelled replay/replay)")
+        req.model = req.provider = REPLAY
+        return
+    if req.model == REPLAY or req.provider == REPLAY:
+        raise ComposeError("model / provider 'replay' is reserved for --agent-backend replay")
+    req.model = req.model or DEFAULT_MODEL[0]
+    req.provider = req.provider or DEFAULT_MODEL[1]
 
 
 def resolve_track(strategy: str, backend: str, track: str | None) -> str:
@@ -208,8 +227,13 @@ def render_claude_md(ctx: dict) -> str:
               "plan revision N+1 (`revision`: N+1 and a `change_log` line).",
               "- CAD tools that import or analyse the scan are denied; the scan is analysed with "
               "retk only. Never import or convert the scan into the CAD model.",
-              "- Executed or harness-given plan revisions, `input/`, `lib/`, `.claude/` and the "
-              "manifests are read-only.", "",
+              "- Write only under `plan/`, `cad/`, `out/` and `work/` (also through MCP tools: "
+              "export / save paths). Executed or harness-given plan revisions, `input/`, `lib/`, "
+              "`.claude/` and the manifests are read-only. Code never names a path outside this "
+              "folder.",
+              "- The benchmark exports the native file only if the CAD source is exactly what "
+              "the last gated execution ran: execute the final version last (with its plan "
+              "revision), and do not edit `cad/` after it.", "",
               "## Conflict rule", "",
               "The strategy decides **what** is built and the reasoning order; the skillset "
               "decides **how** the CAD program is operated. Skillsets contain no reverse-"
@@ -223,11 +247,13 @@ def compose(req: ComposeRequest) -> Path:
     from .sources import env_dir
 
     policy = load_policy()
+    resolve_model(req)
     out = Path(req.out).resolve()
     if out.exists() and any(out.iterdir()):
         if not req.force:
             raise ComposeError(f"{out} exists and is not empty (use --force)")
         shutil.rmtree(out)
+    clear_digest(out)
     # -- skillset / backend
     if req.skillset == "none":
         backend = req.backend or "none"
@@ -251,12 +277,25 @@ def compose(req: ComposeRequest) -> Path:
     if backend != "none" or req.skillset != "none":
         skills_root = env_dir("RECADBENCH_SKILLS_DIR", req.skills_dir)
     skills_src = None
+    warnings: list[str] = []
     if req.skillset != "none":
-        ref = req.skillset_ref or default_tag_ref(Path(skills_root), f"{backend}-{version}")
+        tag = f"{backend}-{version}"
+        tag_ref = default_tag_ref(Path(skills_root), tag)
+        ref = req.skillset_ref or tag_ref
         if ref is None:
-            raise ComposeError(f"tag {backend}-{version} not found in {skills_root}; pass "
+            raise ComposeError(f"tag {tag} not found in {skills_root}; pass "
                                "--skillset-ref <git ref> (recorded in the manifest)")
         skills_src = Source.open(skills_root, ref)
+        if tag_ref is not None and req.skillset_ref:
+            tag_pin = Source.open(skills_root, tag_ref).pin
+            if skills_src.pin != tag_pin:
+                raise ComposeError(f"--skillset-ref {req.skillset_ref} is {skills_src.pin[:12]}, "
+                                   f"but {req.skillset} is tag {tag} = {tag_pin[:12]}: the "
+                                   "skillset id would name other content (drop --skillset-ref "
+                                   "or re-tag)")
+        elif tag_ref is None:
+            warnings.append(f"tag {tag} does not exist: {req.skillset} pinned to "
+                            f"{req.skillset_ref} = {skills_src.pin}")
     elif skills_root is not None:
         skills_src = Source.open(skills_root, req.skillset_ref)
 
@@ -321,7 +360,7 @@ def compose(req: ComposeRequest) -> Path:
         if rel.endswith(".md"):
             strat_src.copy_file(rel, sk_dest / "shared" / Path(rel).name)
 
-    skills, agents, shared, libs, warnings = [], [], [], [], []
+    skills, agents, shared, libs = [], [], [], []
     if skillset is not None:
         base = backend
         for s in skillset["skills"]:
@@ -434,9 +473,14 @@ def compose(req: ComposeRequest) -> Path:
            "cad_prefixes": (iface.get("cad_prefixes") or {}).get("all") or [],
            "allowed_commands": iface.get("allowed_commands") or []}
     (out / "CLAUDE.md").write_text(render_claude_md(ctx), encoding="utf-8", newline="\n")
-    from .render_prompt import write_system_prompt
+    from .render_prompt import SIZE_WARN, write_system_prompt
 
-    write_system_prompt(out)
+    sp = write_system_prompt(out)
+    if sp.stat().st_size > SIZE_WARN:
+        warnings.append(f"system_prompt.md is {sp.stat().st_size} bytes (> {SIZE_WARN}): large "
+                        "for the LiteLLM loop's system message")
+        (out / "run_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
+                                               encoding="utf-8", newline="\n")
     (out / STATE_DIR / "compose.json").write_text(json.dumps(ctx, indent=2, default=str) + "\n",
                                                   encoding="utf-8", newline="\n")
 
@@ -478,8 +522,8 @@ def add_arguments(ap) -> None:
     ap.add_argument("--part", required=True)
     ap.add_argument("--track", choices=["T", "S", "E"])
     ap.add_argument("--harness-level", default=DEFAULT_HARNESS, choices=["H0", "H1", "H2", "H3"])
-    ap.add_argument("--model", default="claude-sonnet-5-5")
-    ap.add_argument("--provider", default="anthropic")
+    ap.add_argument("--model", help=f"default {DEFAULT_MODEL[0]}; replay runs are always 'replay'")
+    ap.add_argument("--provider", help=f"default {DEFAULT_MODEL[1]}")
     ap.add_argument("--agent-backend", default="claude_agent_sdk",
                     choices=["claude_agent_sdk", "litellm_loop", "replay"])
     ap.add_argument("--replicate", type=int, default=0)

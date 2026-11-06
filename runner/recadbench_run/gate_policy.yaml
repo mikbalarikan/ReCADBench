@@ -33,8 +33,42 @@ protected:
   - run_manifest.json
   - efficiency.json
 
+# Run-dir folders the agent may write at all (allow-list; every other path, the run-dir root
+# included, is read-only). The protected list above still applies inside them. Applies to the
+# file tools AND to every MCP argument that names a file the tool writes (write_args below).
+writable: [plan/, cad/, out/, work/]
+
+# Argument names that hold a path in any tool (file tools, MCP tools): always checked, whatever
+# their length; longer than max_path_len or holding a control character = denied.
+path_args: [path, file_path, filename, save_to, mesh_path, candidate_path, out_dir, output_path,
+            output_dir, image_path, svg_path, notebook_path, directory]
+max_path_len: 1024
+
+# MCP tools denied outright (they write outside the writable folders by design).
+blocked_tools: [mcp__build123d__install_skill]
+
+# MCP tools that write a file, per tool: {argument: default}. A non-empty argument (or, when it is
+# missing, a non-empty default) is a write target and goes through the same write check as Write.
+# "<mesh_dir>/renders" = the folder of the call's mesh_path + /renders (retk render's default).
+write_args:
+  mcp__retk__render: {out_dir: "<mesh_dir>/renders"}
+  mcp__build123d__export: {filename: null}
+  mcp__build123d__script: {save_to: null}
+  mcp__build123d__render_view: {save_to: null}
+  mcp__build123d__bank_candidate: {filename: null}
+  mcp__build123d__crop_drawing: {output_path: drawing_crop.png}
+  mcp__build123d__prepare_drawing: {output_dir: drawing_regions}
+  mcp__build123d__render_drawing: {save_to: null}
+  mcp__build123d__save_drawing_annotations: {svg_path: null}
+
+# String literals in code (MCP code arguments, execute_file bodies, NX journals, their importable
+# .py) that name a path outside the run dir (absolute, ~, ..) or a protected run-dir path are
+# denied; so is any literal matching this pattern (the ground-truth store). Best effort: paths
+# built at runtime are not caught (STATUS: GT isolation needs OS isolation).
+gt_name_pattern: '(?i)recadbench[-_]gt\b|RECADBENCH_GT|\bgt(?:_native)?\.(?:step|stp|prt)\b|\bgt_plan(?:\.json)?\b|\bkey_dims\.ya?ml\b|\bregistration\.json\b'
+
 # Harness levels (04_STRATEGIES): the retk tools each level allows; a strategy's toolkit_tools is
-# intersected with this. Default level of compose: H3 (STATUS open question).
+# intersected with this. Default level of compose: H1 (04_STRATEGIES).
 harness_levels:
   H0: [mesh_stats]
   H1: [mesh_stats, self_deviation]
@@ -53,7 +87,13 @@ scan_code_patterns:
   - '(?i)\b(?:open|read\w*|load\w*|import\w*)\s*\(\s*[rbuf]*["''][^"''\n]*\.(?:stl|ply|obj|3mf|pcd)["'']'
   - '(?<![\w.])input[/\\]'
   - '(?i)(?<![\w.])input\.(?:stl|ply|obj|3mf)\b'
-  - '(?<![\w.])(?:__import__|importlib|exec|eval)\s*\('
+  # dynamic code: exec / eval / compile (also as builtins.exec), runpy, importlib, code objects
+  - '(?<![\w.])(?:__import__|importlib|runpy|execfile)\b|(?<![\w.])(?:exec|eval|compile)\s*\('
+  - '\b(?:builtins|__builtins__|__loader__|__spec__)\b|\btypes\.(?:CodeType|FunctionType)\b'
+  # processes, foreign code, deserialisers (a journal is unconfined Python: STATUS)
+  - '\b(?:import|from)\s+(?:[\w.]+\s*,\s*)*(?:subprocess|ctypes|cffi|multiprocessing|pty|socket|pickle|marshal|shelve|code|codeop|winreg|_winapi|msvcrt|_posixsubprocess)\b'
+  - '\b(?:subprocess|ctypes|pickle|marshal|shelve|multiprocessing)\s*\.'
+  - '\bos\s*\.\s*(?:system|popen|exec\w*|spawn\w*|startfile|fork\w*|posix_spawn\w*|kill)\b'
 
 # Per backend: the native deliverable, which files are CAD source (their change = a CAD-side
 # change, plan revision rule), which tools execute a source file, and which tool's denied_tools
@@ -64,6 +104,8 @@ backends:
     source_globs: ["*.py"]
     source_tools:
       mcp__build123d__execute_file: {path_arg: path}
+    # (backend.yaml cad_prefixes.mutating: every tool that changes the session's model is also
+    # held by the revision rule; only source_tools record an execution)
     code_args:
       mcp__build123d__execute: code
     body_as:

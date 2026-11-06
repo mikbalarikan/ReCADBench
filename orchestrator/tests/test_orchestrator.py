@@ -242,7 +242,7 @@ def test_worker_module_is_stdlib_plus_runner():
 
     stdlib = {"io", "json", "os", "socket", "tarfile", "tempfile", "threading", "time",
               "traceback", "pathlib", "__future__", "base64", "hmac", "re", "sqlite3",
-              "urllib", "http"}
+              "urllib", "http", "contextlib"}
     for mod in (worker_mod.__file__, worker_mod.__file__.replace("worker.py", "queue.py")):
         tree = ast.parse(Path(mod).read_text(encoding="utf-8"))
         for node in tree.body:

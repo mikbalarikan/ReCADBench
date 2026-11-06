@@ -152,7 +152,7 @@ def test_budgets_merge_and_tracker():
 
 
 def test_agent_registry():
-    assert get("replay") is replay
+    assert get("replay").module is replay
     with pytest.raises(KeyError):
         get("gpt")
 

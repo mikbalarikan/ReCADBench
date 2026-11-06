@@ -9,9 +9,12 @@ Experiment format::
     name: pilot                       # run-id prefix
     parts: [r385_hs01_motor_mount]    # or  split: dev  (reads <data>/splits/dev.txt)
     replicates: 1
-    harness_level: H3                 # optional (compose default)
+    harness_level: H3                 # optional (default H1, 04_STRATEGIES)
     budgets: {max_turns: 200}         # optional, override task.yaml
-    refs: {strategy: origin/main}     # optional git refs (skillset default: tag <b>-vN)
+    refs:                             # optional git refs
+      strategy: origin/main
+      skillset: {nx@v1: <ref>}        # per skillset id (default: tag <b>-vN); compose refuses a
+                                      # ref that is not that tag's commit when the tag exists
     models:
       - {id: claude-sonnet-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
     tracks:
@@ -41,6 +44,9 @@ from pathlib import Path
 import yaml
 
 TRACKS = ("T", "S", "E")
+EXCLUDE_KEYS = frozenset({"track", "strategy", "skillset", "model", "part", "replicate",
+                          "backend"})
+DEFAULT_HARNESS = "H1"
 SKILLSET_RE = re.compile(r"^(?:(?P<b>[a-z0-9]+)@v[0-9]+|none@(?P<nb>[a-z0-9]+))$")
 
 
@@ -88,9 +94,25 @@ def expand(exp: dict, data_dir: Path | None = None) -> list[dict]:
     models = exp.get("models") or []
     if not models:
         raise ExpandError("models: at least one model")
-    reps = int(exp.get("replicates", 1))
+    reps = exp.get("replicates", 1)
+    if isinstance(reps, bool) or not isinstance(reps, int) or reps < 1:
+        raise ExpandError(f"replicates must be an integer >= 1 (got {reps!r})")
     tracks = exp.get("tracks") or {}
     excl = exp.get("exclude") or []
+    for e in excl:
+        bad = sorted(set(e) - EXCLUDE_KEYS) if isinstance(e, dict) else ["(not a mapping)"]
+        if bad or not e:
+            raise ExpandError(f"exclude entry {e!r}: unknown key(s) {bad} (allowed: "
+                              f"{', '.join(sorted(EXCLUDE_KEYS))})")
+    refs = exp.get("refs") or {}
+    sk_refs = refs.get("skillset")
+    if sk_refs is not None and not isinstance(sk_refs, dict):
+        raise ExpandError("refs.skillset must map a skillset id to a git ref "
+                          "({nx@v1: <ref>}); one ref for every backend would name other content")
+    for m in models:
+        if (m.get("agent_backend") == "replay") != (m.get("id") == "replay"):
+            raise ExpandError(f"model {m.get('id')!r}: the replay agent backend is model id "
+                              "'replay' (and only it)")
     jobs: list[dict] = []
     for track, block in tracks.items():
         if track not in TRACKS:
@@ -123,12 +145,14 @@ def expand(exp: dict, data_dir: Path | None = None) -> list[dict]:
             rid = run_id(name, track, s, sid, backend, mdl["id"], part, rep)
             payload = {"run_id": rid, "track": track, "strategy": s, "skillset": sid,
                        "backend": backend, "part_id": part, "replicate": rep,
-                       "model": mdl["id"], "provider": mdl.get("provider", "anthropic"),
+                       "model": mdl["id"],
+                       "provider": mdl.get("provider", "replay" if mdl["id"] == "replay"
+                                           else "anthropic"),
                        "agent_backend": mdl.get("agent_backend", "claude_agent_sdk"),
-                       "harness_level": exp.get("harness_level") or "H3",
+                       "harness_level": exp.get("harness_level") or DEFAULT_HARNESS,
                        "budgets": dict(exp.get("budgets") or {}),
-                       "strategy_ref": (exp.get("refs") or {}).get("strategy"),
-                       "skillset_ref": (exp.get("refs") or {}).get("skillset"),
+                       "strategy_ref": refs.get("strategy"),
+                       "skillset_ref": (sk_refs or {}).get(sid),
                        "seed_plan": None}
             if mdl.get("agent_options"):
                 payload["agent_options"] = mdl["agent_options"]

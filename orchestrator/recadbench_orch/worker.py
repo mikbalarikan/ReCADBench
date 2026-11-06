@@ -28,7 +28,7 @@ import time
 import traceback
 from pathlib import Path
 
-from .queue import open_queue
+from .queue import QueueError, open_queue
 
 EXCLUDE_UPLOAD = ("input/input.stl", ".claude/", "lib/", "_shared/")
 
@@ -108,19 +108,46 @@ class Worker:
         self.kinds = kinds
         self.dirs = dirs or {}
 
-    def _beat(self, job_id: int, stop: threading.Event) -> None:
-        while not stop.wait(self.lease_s / 3):
+    def _beat(self, job_id: int, stop: threading.Event, lost: threading.Event) -> None:
+        """Extend the lease every lease/3 s. A transient error (network, a locked database) is
+        retried with a short backoff; only an explicit lease loss (QueueError) stops it."""
+        wait = self.lease_s / 3
+        while not stop.wait(wait):
             try:
                 self.q.heartbeat(job_id, self.worker, self.lease_s)
-            except Exception:
+                wait = self.lease_s / 3
+            except QueueError:
+                lost.set()
                 return
+            except Exception:  # transient: retry soon, well inside the lease
+                wait = min(self.lease_s / 3, max(0.05, self.lease_s / 20))
+
+    claim_tries = 5
+    claim_backoff_s = 0.5
+
+    def _claim(self):
+        """claim with retry + backoff on transient queue errors (database locked, network)."""
+        delay, tries = self.claim_backoff_s, self.claim_tries
+        for k in range(tries):
+            try:
+                return self.q.claim(self.worker, self.host, self.caps, self.lease_s,
+                                    kinds=self.kinds)
+            except Exception:
+                if k == tries - 1:
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 2, 10.0)
+        return None
 
     def once(self) -> dict | None:
-        job = self.q.claim(self.worker, self.host, self.caps, self.lease_s, kinds=self.kinds)
+        try:
+            job = self._claim()
+        except Exception as exc:  # the loop goes on; the next poll tries again
+            return {"id": None, "state": "claim_error", "error": f"{type(exc).__name__}: {exc}"}
         if job is None:
             return None
-        stop = threading.Event()
-        threading.Thread(target=self._beat, args=(job["id"], stop), daemon=True).start()
+        stop, lost = threading.Event(), threading.Event()
+        threading.Thread(target=self._beat, args=(job["id"], stop, lost), daemon=True).start()
         try:
             if job["kind"] == "run":
                 if job.get("backend") == "nx":
@@ -133,20 +160,32 @@ class Worker:
             else:
                 raise ValueError(f"unknown job kind {job['kind']!r}")
             stop.set()
-            self.q.complete(job["id"], self.worker, res)
-            return {"id": job["id"], "state": "done", "result": res}
         except Exception as exc:
             stop.set()
             err = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-3000:]}"
-            state = self.q.fail(job["id"], self.worker, err)
+            try:
+                state = self.q.fail(job["id"], self.worker, err)
+            except QueueError as qe:  # lease lost meanwhile: another worker owns the job now
+                return {"id": job["id"], "state": "lease_lost", "error": f"{exc}; {qe}"}
             return {"id": job["id"], "state": state, "error": str(exc)}
+        try:
+            self.q.complete(job["id"], self.worker, res)
+        except QueueError as qe:
+            return {"id": job["id"], "state": "lease_lost", "error": str(qe), "result": res,
+                    "heartbeat_lost": lost.is_set()}
+        return {"id": job["id"], "state": "done", "result": res}
 
     def run_job(self, job: dict) -> dict:
         from recadbench_run.run import run_job
 
         payload = dict(job["payload"])
         payload.setdefault("run_id", job.get("run_id"))
-        out = run_job(payload, self.runs, force=True, **self.dirs)
+        # one run dir per attempt: a retry (or a second worker after a lost lease) never
+        # deletes the dir another attempt may still be writing
+        rid = payload.get("run_id") or f"job-{job['id']}"
+        attempt = int(job.get("attempts") or 1)
+        out_dir = self.runs / (rid if attempt <= 1 else f"{rid}.a{attempt}")
+        out = run_job(payload, self.runs, force=True, out=out_dir, **self.dirs)
         run_dir = Path(out["run_dir"])
         score_payload = {"run_id": out["run_id"], "part_id": payload["part_id"],
                          "run_dir": str(run_dir)}
@@ -180,6 +219,10 @@ class Worker:
             if r is None:
                 if idle_exit:
                     break
+                time.sleep(poll_s)
+                continue
+            if r.get("state") == "claim_error":
+                print(json.dumps({"worker": self.worker, **r}), flush=True)
                 time.sleep(poll_s)
                 continue
             n += 1

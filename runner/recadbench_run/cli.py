@@ -27,7 +27,11 @@ def _agent(a) -> int:
     m = manifest(Path(a.run_dir))
     name = a.agent_backend or m.get("agent_backend") or m.get("agent_driver", "claude_agent_sdk")
     opts = {"script": a.script} if a.script else {}
-    res = agents.get(name).run(a.run_dir, model=a.model, **opts)
+    try:
+        res = agents.get(name).run(a.run_dir, model=a.model, **opts)
+    except KeyError as exc:  # unknown agent backend / replay script: a clean error, no traceback
+        print(json.dumps({"ok": False, "error": str(exc).strip("'\"")}))
+        return 2
     out = {"ok": res.ok, "stop_reason": res.stop_reason, "efficiency": res.efficiency,
            "details": res.details}
     if a.finish:
@@ -56,6 +60,9 @@ def _run(a) -> int:
     except ComposeError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
         return 1
+    except KeyError as exc:
+        print(json.dumps({"ok": False, "error": str(exc).strip("'\"")}))
+        return 2
     print(json.dumps(out, default=str))
     return 0 if out["finish"]["ok"] and out["agent"]["ok"] else 1
 

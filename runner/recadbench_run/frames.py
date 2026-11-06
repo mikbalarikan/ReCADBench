@@ -123,11 +123,25 @@ def map_selector(T: Matrix, sel: str) -> tuple[str, list[float] | None]:
     e[_AXES[d[1]]] = 1.0 if d[0] == "+" else -1.0
     v = apply_vector(T, e)
     n = m.group("n") or ""
+    if n and not _identity_rotation(T):
+        # executors index the matching faces after sorting them by world (X, Y, Z); a rotation
+        # changes that order, so the index would pick another face: drop it (note says which)
+        return f"{m.group('fid')}:{m.group('kind')}:any:any", v
     for ax, i in _AXES.items():
         if abs(abs(v[i]) - 1.0) <= AXIS_TOL:
             sign = "+" if v[i] > 0 else "-"
-            return f"{m.group('fid')}:{m.group('kind')}:{sign}{ax}:{m.group('ext')}{n}", None
-    return f"{m.group('fid')}:{m.group('kind')}:any:any{n}", v
+            ext = m.group("ext")
+            if sign != d[0] and ext in ("max", "min"):
+                # the extremum is taken along the WORLD axis coordinate: x'_i = (sign flip) x_j,
+                # so the face with the max coordinate becomes the one with the min coordinate
+                ext = "min" if ext == "max" else "max"
+            return f"{m.group('fid')}:{m.group('kind')}:{sign}{ax}:{ext}{n}", None
+    return f"{m.group('fid')}:{m.group('kind')}:any:any", v
+
+
+def _identity_rotation(T: Matrix) -> bool:
+    return all(abs(T[i][j] - (1.0 if i == j else 0.0)) <= AXIS_TOL
+               for i in range(3) for j in range(3))
 
 
 # -------------------------------------------------------------------------------- the plan
@@ -167,8 +181,11 @@ def map_plan(plan: dict, T: Sequence[Sequence[float]], taxonomy=None) -> tuple[d
                 return s
             new, vec = map_selector(M, s)
             if vec is not None:
-                _lost.append(f"{s} -> {new}: direction {s.split(':')[2]} of the reference "
-                             f"frame is [{vec[0]}, {vec[1]}, {vec[2]}] in this frame")
+                parts = s.split(":")
+                extra = (f"; face index :{parts[4]} dropped (the face order changes under the "
+                         "rotation)") if len(parts) == 5 else ""
+                _lost.append(f"{s} -> {new}: direction {parts[2]} of the reference "
+                             f"frame is [{vec[0]}, {vec[1]}, {vec[2]}] in this frame{extra}")
             return new
 
         params = f.get("params") or {}

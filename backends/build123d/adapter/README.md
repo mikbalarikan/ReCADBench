@@ -10,6 +10,7 @@ imports `recadbench_spec` and the evaluator never imports it.
 | `adapter.py` | CLI entry point (argparse); runs native scripts, canonical STEP export, set-param, replay, execute-ir |
 | `b3d_trace.py` | `extract`: runtime trace of build123d operations → taxonomy features, `unmapped`, `parameters` |
 | `b3d_ir.py` | `execute-ir`: IR validation + deterministic IR → build123d script generator (stdlib only) |
+| `b3d_sandbox.py` | `RECAD_SANDBOX=1` (set by `recadbench finish` for agent-written code): AST check, restricted builtins, import allow-list (build123d, math, geometric OCP modules; no `io` / `os` / `inspect`, nothing next to the script); off by default (conformance, replays) |
 
 ## Contract
 

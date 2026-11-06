@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from . import agents
-from .compose import ComposeRequest, compose
+from .compose import ComposeRequest, compose, resolve_model
 from .finish import finish
 
 JOB_KEYS = ("strategy", "skillset", "part_id", "backend", "track", "harness_level", "model",
@@ -29,6 +29,7 @@ def run_job(job: dict, runs_dir: str | Path, *, score: bool = False, enqueue=Non
     run_id = job.get("run_id")
     req = request_from_job(job, Path(out) if out else Path(runs_dir) / (run_id or "pending"),
                            **dirs)
+    resolve_model(req)
     if run_id is None and out is None:
         from .compose import default_run_id, resolve_track
 

@@ -7,7 +7,8 @@ whose gate decision is part of the test (``"deny"`` / ``"allow"``); a mismatch f
 
 Built-in scripts (``--script <name>``): ``oracle_build123d`` (Track T oracle with the build123d
 skillset: read the seeded plan, write cad/part.py through the skillset contract, run it in the
-MCP session, validate). A JSON file ``[{"tool": ..., "args": {...}, "expect": ...}, ...]`` is a
+MCP session, validate) and ``nx_smoke`` (NX pipeline check, one cylinder journal; not an
+oracle). A JSON file ``[{"tool": ..., "args": {...}, "expect": ...}, ...]`` is a
 static script.
 """
 
@@ -53,7 +54,33 @@ def oracle_build123d(ctx: dict) -> Generator[Step, object, None]:
     del res
 
 
-SCRIPTS = {"oracle_build123d": oracle_build123d}
+NX_SMOKE_JOURNAL = """import NXOpen
+from nxhelpers import nxh
+
+part = nxh.work_part()
+nxh.expr(part, "smoke_d", "20")
+nxh.cylinder(part, (0, 0, 0), (0, 0, 1), "smoke_d", 10.0)
+"""
+
+
+def nx_smoke(ctx: dict) -> Generator[Step, object, None]:
+    """NX pipeline check (needs NX + licence; NOT an oracle: there is no IR -> NX Open compiler,
+    so the result is a gate fail on geometry). Exercises the gate on the cli backend (nx-run
+    allowed only for a cad/ journal after the plan, no shell chaining, revision rule) and the
+    whole nx-run -> finish -> score path on one cylinder journal."""
+    yield Step("Read", {"file_path": "plan/re_plan.v1.json"}, expect="allow")
+    yield Step("Bash", {"command": "recadbench nx-run cad/step_01.py"}, expect="deny",
+               note="journal does not exist yet")
+    yield Step("Write", {"file_path": "cad/step_01.py", "content": NX_SMOKE_JOURNAL},
+               expect="allow")
+    yield Step("Bash", {"command": "recadbench nx-run cad/step_01.py; whoami"}, expect="deny")
+    yield Step("Bash", {"command": "python cad/step_01.py"}, expect="deny")
+    yield Step("Write", {"file_path": "input/task.yaml", "content": "x"}, expect="deny")
+    yield Step("Bash", {"command": "recadbench nx-run cad/step_01.py"}, expect="allow")
+    yield Step("Write", {"file_path": "plan/re_plan.v1.json", "content": "{}"}, expect="deny")
+
+
+SCRIPTS = {"oracle_build123d": oracle_build123d, "nx_smoke": nx_smoke}
 
 
 def load(name_or_path: str):

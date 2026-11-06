@@ -20,6 +20,7 @@ HTTP (``recadbench-orch serve``, bearer token ``RECADBENCH_QUEUE_TOKEN``): ``POS
 from __future__ import annotations
 
 import base64
+import contextlib
 import hmac
 import json
 import os
@@ -74,12 +75,21 @@ class JobQueue:
         self.clock = clock
         self._lock = threading.Lock()
         with self._conn() as c:
+            # WAL: readers never block the claimer; several worker processes on one file
+            with contextlib.suppress(sqlite3.OperationalError):
+                c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _conn(self):
+        """One autocommit connection, closed on exit (sqlite3's own context manager does not
+        close)."""
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
         c.row_factory = sqlite3.Row
-        return c
+        try:
+            yield c
+        finally:
+            c.close()
 
     # -- producer
     def enqueue(self, kind: str, payload: dict, requires=(), backend: str | None = None,
@@ -107,8 +117,13 @@ class JobQueue:
         with self._lock, self._conn() as c:
             c.execute("BEGIN IMMEDIATE")
             try:
-                c.execute("UPDATE jobs SET state='queued', worker=NULL, lease_until=NULL "
-                          "WHERE state='running' AND lease_until < ?", (now,))
+                # expired leases: back to the queue, or failed once max_attempts is used up (a
+                # job that kills its worker is not retried forever)
+                c.execute("UPDATE jobs SET state = CASE WHEN attempts >= max_attempts THEN "
+                          "'failed' ELSE 'queued' END, worker=NULL, lease_until=NULL, "
+                          "error='lease expired', finished = CASE WHEN attempts >= max_attempts "
+                          "THEN ? ELSE finished END WHERE state='running' AND lease_until < ?",
+                          (now, now))
                 running = {}
                 for r in c.execute("SELECT backend, COUNT(*) n FROM jobs WHERE state='running' "
                                    "AND host = ? GROUP BY backend", (host,)):
@@ -121,14 +136,19 @@ class JobQueue:
                     b = r["backend"]
                     if b in limits and running.get(b, 0) >= limits[b]:
                         continue
-                    c.execute("UPDATE jobs SET state='running', worker=?, host=?, "
-                              "lease_until=?, started=?, attempts=attempts+1 WHERE id=?",
-                              (worker, host, now + lease_s, now, r["id"]))
+                    cur = c.execute("UPDATE jobs SET state='running', worker=?, host=?, "
+                                    "lease_until=?, started=?, attempts=attempts+1 "
+                                    "WHERE id=? AND state='queued'",
+                                    (worker, host, now + lease_s, now, r["id"]))
+                    if cur.rowcount != 1:
+                        continue
                     c.execute("COMMIT")
                     return self.get(r["id"])
                 c.execute("COMMIT")
-            except Exception:
-                c.execute("ROLLBACK")
+            except BaseException:
+                if c.in_transaction:  # keep the original error (e.g. database is locked)
+                    with contextlib.suppress(sqlite3.Error):
+                        c.execute("ROLLBACK")
                 raise
         return None
 
