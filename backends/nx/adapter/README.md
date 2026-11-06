@@ -1,7 +1,5 @@
 # backends/nx/adapter
 
-**Purpose:** Adapter CLI `recad nx export|extract|set-param|replay` as NX Open journals run via run_journal.exe. Runs on the worker host, post-run, in a clean process; the evaluator never imports it.
-
-**Filled by:** P4 (see `recadbench/docs/architecture/`06_SESSION_PROMPTS.md).
-
-Scaffolded in P1; no logic yet.
+`recad nx export | extract | set-param | replay | version`. `adapter.py` is the host side (stdlib),
+`nx_adapter_journal.py` + `nx_measure.py` run inside NX, `nx_taxonomy.py` is the pure mapping /
+counting rule (CI-tested). Mapping table and native-model contract: [`../README.md`](../README.md).

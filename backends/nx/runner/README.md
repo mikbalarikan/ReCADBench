@@ -1,7 +1,6 @@
 # backends/nx/runner — `recadbench nx-run`
 
-**Purpose:** Thin wrapper over `run_journal.exe`: one journal under `cad/`, timeout (default 120 s), captures stdout/err + NX syslog excerpt, writes `cad/last_run.json` (05_TOOLS.md contract).
-
-**Filled by:** P4 (see `recadbench/docs/architecture/`06_SESSION_PROMPTS.md).
-
-Scaffolded in P1; no logic yet.
+`nx_run.py` (host side, stdlib) launches `nx_wrapper.py` (NX side) through `run_journal.exe`:
+timeout, host-wide NX lock, log capture, syslog excerpt, `cad/last_run.json`. Contract and
+behaviour: [`../README.md`](../README.md). Entry point: `recadbench nx-run` (backends package,
+`recad_cli/recadbench.py`).

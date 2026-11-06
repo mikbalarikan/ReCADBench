@@ -1,0 +1,40 @@
+# L1 pin: Siemens NX backend (05_TOOLS.md, 00_DECISIONS D1). NX is used unmodified.
+# Agent path: the agent writes NX Open Python journals into cad/ and runs ONLY
+#   recadbench nx-run cad/<journal>.py
+# (backends/nx/runner/nx_run.py over run_journal.exe; journals model in cad/part.prt; each run
+# writes cad/last_run.json). No MCP: DreamEnding/NX_MCP is not used in v1.
+id: nx
+software:
+  name: Siemens NX
+  version: '2206'
+  source: Siemens NX 2206 (commercial licence, FlexNet SPLM_LICENSE_SERVER); batch runner
+    NXBIN/run_journal.exe, embedded Python 3.10.9
+  journal_python: 3.10.9 (NX 2206 embedded)
+  template: model-plain-1-mm-template.prt
+interface:
+  kind: cli
+  allowed_commands:
+  - recadbench nx-run cad/*.py
+  runner:
+    command: recadbench nx-run
+    default_timeout_s: 120
+    part: cad/part.prt
+    result: cad/last_run.json
+    logs: cad/logs/<journal>.log
+    lib_on_sys_path: lib/  # the skillset's lib/ in the run dir (compose copies it there)
+hosts:
+- windows
+adapter_cli:
+  export: recad nx export
+  extract: recad nx extract
+  set_param: recad nx set-param
+  replay: recad nx replay
+# One NX licence per host => one NX process at a time (00_DECISIONS D9). nx_run.py also holds a
+# host-wide lock file, so concurrent callers queue instead of failing.
+max_parallel: 1
+# Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad, ASUS host).
+conformance:
+  passed: 10
+  total: 10
+  date: '2026-11-06'
+  software_version: NX 2206 (run_journal.exe 2023-05-31), Windows 11; adapter Python 3.13
