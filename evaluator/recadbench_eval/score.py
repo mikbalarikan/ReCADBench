@@ -28,7 +28,7 @@ from . import __version__, brep, gtstore
 from .align import align
 from .config import CLASS_KEYDIM_TOL, EvalConfig, bands
 from .deviation import Bands, effective_bands, observable_labels, s1
-from .gate import GateResult, freeform_gate, static_gate
+from .gate import GateResult, bbox_gate, freeform_gate, static_gate
 from .geom import Samples, Surface, sample
 from .intent import measure_key_dims, relations, score_s3
 from .parsimony import s2
@@ -54,6 +54,7 @@ class GtContext:
     chord: float
     bands: Bands
     tol: float
+    volume: float
 
 
 _GT_CACHE: dict = {}
@@ -77,7 +78,7 @@ def gt_context(part_id: str, cfg: EvalConfig) -> GtContext:
         observable=observable_labels(smp.points, part.mask_points, part.mask_observable),
         hist=brep.face_type_areas(recs), b1=int(part.meta.get("b1", brep.genus(shape))),
         chord=chord, bands=effective_bands(cb, part.floor_p95, cfg.k_floor),
-        tol=CLASS_KEYDIM_TOL[tcls],
+        tol=CLASS_KEYDIM_TOL[tcls], volume=abs(brep.volume(shape)),
     )
     _GT_CACHE[key] = ctx
     return ctx
@@ -106,7 +107,34 @@ def _sha(p: Path) -> str | None:
 
 
 def _json(p: Path) -> dict | None:
-    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    """Run-dir JSON; ``utf-8-sig`` accepts the BOM Windows PowerShell 5.1 writes."""
+    return json.loads(p.read_text(encoding="utf-8-sig")) if p.is_file() else None
+
+
+def read_features(p: Path) -> tuple[dict | None, str | None]:
+    """``(features, error)``: an unreadable or spec-invalid features.json is a gate failure
+    (03_SCORING section 1: the counts come from the adapter; an inconsistent extraction, e.g. a
+    ``count`` that disagrees with the ``counted`` rows, is not scoreable)."""
+    from recadbench_spec import validate_document
+
+    if not p.is_file():
+        return None, None
+    try:
+        doc = _json(p)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, f"features.json unreadable ({type(exc).__name__}: {exc})"
+    if not isinstance(doc, dict):
+        return None, "features.json unreadable (not a JSON object)"
+    rep = validate_document(doc, "features")
+    if not rep.ok:
+        errs = "; ".join(str(e) for e in rep.errors[:3])
+        return None, f"features.json invalid against the spec: {errs}"
+    return doc, None
+
+
+def near_point_limit(cfg: EvalConfig, b: Bands) -> float:
+    """How far a key-dim / relation face may lie from its GT probe point (mm)."""
+    return max(cfg.near_point_max_mm, cfg.near_point_band_k * b.wide)
 
 
 def plan_files(run_dir: Path) -> list[Path]:
@@ -202,7 +230,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     g = GateResult()
     step = run_dir / "out" / "output.step"
     feats_p = _features_path(run_dir)
-    features = _json(feats_p)
+    features, feats_err = read_features(feats_p)
     details["inputs"] = {"output.step": _sha(step), "features.json": _sha(feats_p)}
     try:
         pred = brep.load_step(step)
@@ -215,15 +243,20 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     recs_scan = brep.face_records(pred_one)
     try:
         tess_scan = brep.tessellate(pred_one, ctx.chord, cfg.angular_rad)
-        verts_gt = brep.apply(ctx.part.T_scan_to_gt, tess_scan.vertices)
     except ValueError:
-        tess_scan, verts_gt = None, None
+        tess_scan = None
     static_gate(
         g, n_solids=len(sols), valid=brep.is_valid(pred), closed=brep.shells_closed(pred),
         recs=recs_scan, n_triangles_planar=brep.triangle_face_count(recs_scan),
-        faces_gt=int(meta["faces_gt"]), pred_vertices=verts_gt, gt_vertices=ctx.tess.vertices,
-        features=features, cfg=cfg,
+        faces_gt=int(meta["faces_gt"]), pred_volume=brep.volume(pred_one),
+        gt_volume=ctx.volume, features=features, cfg=cfg,
+        n_shells=len(sols[0].shells()) if len(sols) == 1 else 0, features_error=feats_err,
     )
+    if features is not None and features.get("face_count") is not None:
+        # report only: the adapter counts native faces, a STEP round trip may split periodic
+        # faces, so a mismatch is not by itself proof of a foreign features.json
+        details["inputs"]["face_count_features"] = int(features["face_count"])
+        details["inputs"]["face_count_step"] = len(recs_scan)
     if features is not None:
         metrics["ir_adherence"] = ir_adherence(ctx.part.plan, features) if ctx.part.plan else None
         if metrics["ir_adherence"] is None:
@@ -246,6 +279,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     psmp = sample(tess, cfg.n_samples, cfg.seed + 1)
     psurf = Surface(tess)
     pkinds = np.array([recs[i].kind for i in psmp.face_id])
+    bbox_gate(g, tess.vertices, ctx.tess.vertices, cfg)
     freeform_gate(g, tier=int(meta["tier"]), gt_pts=ctx.samples.points, gt_kind=ctx.kinds,
                   pred_pts=psmp.points, pred_kind=pkinds, cfg=cfg)
     if not g.ok:
@@ -254,8 +288,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     details["gate"] = {"checks": g.checks, "reasons": []}
 
     # ---- S1
-    r1 = s1(ctx.samples, ctx.observable, ctx.surface, psmp, psurf, ctx.part.mask_points,
-            ctx.part.mask_observable, ctx.bands, cfg)
+    r1 = s1(ctx.samples, ctx.observable, ctx.surface, psmp, psurf, ctx.bands, cfg)
     for k in ("p_tight", "p_wide", "mean", "rms", "p95", "max", "hausdorff",
               "p_tight_inferred", "p_wide_inferred"):
         if r1.get(k) is not None:
@@ -265,9 +298,10 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
                      "band_wide_class_mm": ctx.bands.wide_class}
 
     # ---- S3 key dims (needed by S2 parametric presence)
-    dims = measure_key_dims(ctx.part.key_dims, recs, ctx.tol, cfg)
+    lim = near_point_limit(cfg, ctx.bands)
+    dims = measure_key_dims(ctx.part.key_dims, recs, ctx.tol, cfg, max_dist=lim)
     rels = relations(ctx.recs, recs, ctx.surface, ctx.samples.points, psurf, psmp.points,
-                     ctx.bands.tight_class, cfg)
+                     ctx.bands.tight_class, cfg, max_dist=lim)
     s3v, s3d = score_s3(dims, rels)
     metrics["key_dims_ok"] = s3d["key_dims_ok"]
     details["S3"] = {**s3d, "dims": [d.as_dict() for d in dims], "relations_detail": rels}

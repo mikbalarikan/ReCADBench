@@ -4,9 +4,11 @@ Two-way sampling GT B-rep <-> prediction B-rep (``n_samples`` each, fixed seeds)
 distances to the other surface (exact, see ``geom.Surface``).
 
 - **Observable region**: every GT sample is looked up in ``observability_mask.npz`` (nearest
-  mask sample; the mask was sampled on the same gt.step). A prediction sample takes the label
-  of its closest GT point. ``p_tight``/``p_wide`` use the observable samples of both directions;
-  the rest is reported as ``p_*_inferred`` (not scored in v1). Synthetic parts: all observable.
+  mask sample; the mask was sampled on the same gt.step). Only GT samples the scan does not
+  cover are excluded (03_SCORING: "GT sample points the scan does not cover are excluded"):
+  ``p_tight``/``p_wide`` use the observable GT->pred samples plus **every** pred->GT sample, so
+  material added over an unobserved GT patch is always scored. The unobserved GT->pred samples
+  are reported as ``p_*_inferred`` (not scored in v1). Synthetic parts: all observable.
 - **Noise floor**: ``band_eff = max(class band, k * scan_floor.scan_to_gt_p95_mm)``.
 - ``S1 = 24 * lin(p_tight; 60% -> 0, target -> 1) + 16 * lin(p_wide; 85% -> 0, target -> 1)``.
 - Reported only: mean, RMS, P95, max (observable), Hausdorff (all). Never scored on max.
@@ -54,12 +56,11 @@ def _share(d: np.ndarray, band: float) -> float | None:
 
 
 def s1(gt: Samples, gt_obs: np.ndarray, gt_surface: Surface, pred: Samples,
-       pred_surface: Surface, mask_pts, mask_obs, bands: Bands, cfg: EvalConfig) -> dict:
+       pred_surface: Surface, bands: Bands, cfg: EvalConfig) -> dict:
     d_g2p = pred_surface.query(gt.points, beyond_mm=FAR_MM)[0]
-    d_p2g, foot, _, _ = gt_surface.query(pred.points, beyond_mm=FAR_MM)
-    p_obs = observable_labels(foot, mask_pts, mask_obs)
-    d_obs = np.concatenate([d_g2p[gt_obs], d_p2g[p_obs]])
-    d_inf = np.concatenate([d_g2p[~gt_obs], d_p2g[~p_obs]])
+    d_p2g = gt_surface.query(pred.points, beyond_mm=FAR_MM)[0]
+    d_obs = np.concatenate([d_g2p[gt_obs], d_p2g])
+    d_inf = d_g2p[~gt_obs]
     d_all = np.concatenate([d_g2p, d_p2g])
     p_tight = _share(d_obs, bands.tight) or 0.0
     p_wide = _share(d_obs, bands.wide) or 0.0
@@ -80,7 +81,7 @@ def s1(gt: Samples, gt_obs: np.ndarray, gt_surface: Surface, pred: Samples,
         "targets_met": bool(p_tight >= bands.tight_target and p_wide >= bands.wide_target),
         "detail": {
             "gt_to_pred_p_tight": _share(d_g2p[gt_obs], bands.tight),
-            "pred_to_gt_p_tight": _share(d_p2g[p_obs], bands.tight),
+            "pred_to_gt_p_tight": _share(d_p2g, bands.tight),
             "observable_share_gt_samples": float(gt_obs.mean()),
             "n_observable": int(len(d_obs)),
             "n_inferred": int(len(d_inf)),

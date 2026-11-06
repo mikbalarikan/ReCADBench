@@ -27,14 +27,17 @@ BOSS_C = (10.0, 0.0)
 HOLES = [(-12.0, 8.0), (-12.0, -8.0)]
 
 
-def build_shape():
+def build_shape(holes=None, bore_c=None):
+    """The synthetic GT part; ``holes`` / ``bore_c`` override the through holes and the bore
+    centre (edited candidates in the regression tests)."""
     from build123d import Box, Cylinder, Pos
 
     top = PLATE_T + BOSS_H
+    bx, by = bore_c or BOSS_C
     part = Pos(0, 0, PLATE_T / 2) * Box(40, 30, PLATE_T)
     part = part + Pos(BOSS_C[0], BOSS_C[1], PLATE_T + BOSS_H / 2) * Cylinder(BOSS_D / 2, BOSS_H)
-    part = part - Pos(BOSS_C[0], BOSS_C[1], top / 2) * Cylinder(BORE_D / 2, top)
-    for x, y in HOLES:
+    part = part - Pos(bx, by, top / 2) * Cylinder(BORE_D / 2, top)
+    for x, y in HOLES if holes is None else holes:
         part = part - Pos(x, y, PLATE_T / 2) * Cylinder(HOLE_D / 2, PLATE_T)
     return part.solids()[0]
 

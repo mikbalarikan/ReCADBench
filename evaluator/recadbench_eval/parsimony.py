@@ -1,7 +1,8 @@
 """S2 parsimony (25, anti-LEGO). 03_SCORING §3 S2.
 
-``r = N_pred / N_ref`` with ``N_pred`` = ``features.json: count`` (extracted by the adapter on
-the worker, never self-reported) and ``N_ref`` = ``meta.yaml: n_ref``.
+``r = N_pred / N_ref`` with ``N_pred`` = the number of ``features.json`` rows with
+``counted: true`` (extracted by the adapter on the worker, never self-reported; recomputed here
+rather than read from the derived ``count`` field) and ``N_ref`` = ``meta.yaml: n_ref``.
 
 - 0.7 <= r <= 1.2 -> 25; 1.2 < r <= 3 -> linear to 0; r > 3 -> 0 and the total is capped at 40;
 - 0.5 <= r < 0.7 -> linear 25 -> 10; r < 0.5 -> 0;
@@ -79,7 +80,7 @@ def param_coverage(dims, features: dict, tol: float) -> tuple[float, list[str]]:
 
 def s2(features: dict, n_ref: int, faces_pred: int, faces_gt: int, dims, tol: float,
        cfg: EvalConfig) -> dict:
-    n_pred = int(features.get("count", 0))
+    n_pred = sum(1 for f in features.get("features") or [] if f.get("counted") is True)
     r = n_pred / n_ref if n_ref else 0.0
     score = ratio_curve(r)
     face_ratio = faces_pred / faces_gt if faces_gt else 0.0

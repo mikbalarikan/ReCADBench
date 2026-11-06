@@ -27,12 +27,12 @@ recadbench-eval golden --part <part_id> --out-dir <tmp>     # test candidates, n
 
 | Step | Module | Notes |
 |---|---|---|
-| Gate (static) | `gate.py` | loads; 1 solid; `BRepCheck` valid; closed shell; faceted (`faces > 3 x faces_gt` or > 50% of the planar faces are triangles); scale: sorted principal extents within 20% of the GT's; `features.json` present and `unmapped` empty |
+| Gate (static) | `gate.py` | loads; 1 solid; `BRepCheck` valid; closed shell; exactly one shell (b2 = 0, no internal voids); faceted (`faces > 3 x faces_gt` or > 50% of the planar faces are triangles); scale / volume sanity: `cbrt(V_pred / V_gt)` within 20% of 1; `features.json` readable (BOM accepted), valid against the spec `features` schema (incl. the `count` rule), present and `unmapped` empty |
 | Align | `align.py` | `T_scan_to_gt`, then trimmed point-to-plane ICP (fixed seed). When the two-way F1 at the tight band is < 0.8, it tries 24 PCA orientations (coarse 20/8/3 mm, then fine) and keeps the best by F1, then RMSE. Reports `datum_offset` |
-| Gate (aligned) | `gate.py` | freeform cover-up (tier 1-2): > 30% of the GT plane/cylinder area is B-spline in the candidate |
-| S1 (40) | `deviation.py` | two-way, 50k samples per side, exact distances (`geom.Surface`). Observable region from `observability_mask.npz` (nearest mask sample; a candidate sample takes the label of its closest GT point). `band_eff = max(class band, k * scan_floor p95)` with `k = 1.5` from config. `p_*_inferred` is reported only |
-| S2 (25) | `parsimony.py` | `r = features.count / n_ref`; the face-ratio and parametric-presence halvings; `r > 3` caps the total at 40 |
-| S3 (20) | `intent.py` | 12 pts: intrinsic key dims, nearest same-type face (axis within 2 deg), class tolerance (limits included). 4 pts: standard values (only dims with `standard: true`). 4 pts: GT-coaxial groups stay coaxial (0.01 mm) and GT symmetry planes are kept |
+| Gate (aligned) | `gate.py` | bbox: per-axis extents of the aligned candidate within 20% of the GT's; freeform cover-up (tier 1-2): > 30% of the GT plane/cylinder area is B-spline in the candidate |
+| S1 (40) | `deviation.py` | two-way, 50k samples per side, exact distances (`geom.Surface`). Observable region from `observability_mask.npz` (nearest mask sample): only unobserved GT samples are excluded, every candidate sample is scored (material added over an unobserved patch counts). `band_eff = max(class band, k * scan_floor p95)` with `k = 1.5` from config. `p_*_inferred` is reported only |
+| S2 (25) | `parsimony.py` | `r = N_pred / n_ref`, `N_pred` = features.json rows with `counted: true` (recomputed, not the `count` field); the face-ratio and parametric-presence halvings; `r > 3` caps the total at 40 |
+| S3 (20) | `intent.py` | 12 pts: intrinsic key dims, nearest same-type face (axis within 2 deg) within `max(1 mm, 3 x wide band_eff)` of the GT near_point (else not measured), class tolerance (limits included). 4 pts: standard values (only dims with `standard: true`). 4 pts: GT-coaxial groups stay coaxial (0.01 mm) and GT symmetry planes are kept |
 | S4 (10) | `topology.py` | b1 from B-rep topology (`chi = V - E + sum(2 - wires)`), plus `1 - TVD` of the face-type area histogram |
 | S5 (5) | `editability.py` | behind `--s5`: rebuild ok, volume moves in the expected direction, and the part outside the edited region stays within the tight band |
 | Plan score (100) | `plan_score.py` | Hungarian F1 on (type, key params), key dims in the plan, primary datum (rotated by `T_scan_to_gt`), count ratio, order plausibility |
@@ -47,7 +47,11 @@ Without S5 the total is out of 95, as the spec example shows.
   fraction. When it has no coaxial group or symmetry plane, the 4 relation points do the same.
   The points are neither free nor lost. None of the R385 pilots flag a standard dim today.
 - The scale gate compares against the GT rather than the raw scan, whose extents include stray
-  patches and table remnants. It uses rotation-invariant principal extents.
+  patches and table remnants. The static check is the rotation-invariant volume scale
+  (vertex-PCA extents tilted with uneven tessellation density and zeroed a part with one small
+  hole missing); the bbox check runs after alignment, in the GT frame.
+- PASS does not include topology: a part with two of four holes plugged where the scan does not
+  see them can PASS (b1 only costs S4 points). Known rubric gap, for P11.
 - Key-dim tolerance includes its limits (|err| <= tol). The golden `wrong_dim` therefore uses
   1.5 x tol (0.03 mm for class B), so the error is detected robustly, where an error of exactly
   0.02 would sit on the limit.

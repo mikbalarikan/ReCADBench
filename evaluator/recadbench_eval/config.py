@@ -48,6 +48,10 @@ class EvalConfig:
     coaxial_tol_mm: float = 0.01
     max_relations: int = 8
     symmetry_gt_tol_mm: float = 0.02
+    # a key-dim / relation face must lie within max(near_point_max_mm, k * wide band_eff) of its
+    # GT probe point, so a duplicate feature elsewhere cannot stand in for a missing one
+    near_point_max_mm: float = 1.0
+    near_point_band_k: float = 3.0
     # PASS (03_SCORING §4)
     pass_r_min: float = 0.5
     pass_r_max: float = 1.5

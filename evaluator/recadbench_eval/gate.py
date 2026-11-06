@@ -1,16 +1,21 @@
 """Gate G0 (fail => all scores 0). 03_SCORING §1.
 
 Static checks (before alignment):
-- STEP loads, exactly one solid, ``BRepCheck_Analyzer`` valid, closed shell;
+- STEP loads, exactly one solid, ``BRepCheck_Analyzer`` valid, closed shell, and the solid has
+  exactly one shell (b2 = 0: no internal voids / hollow skins; 03_SCORING S4 relies on it);
 - faceted / mesh-to-B-rep: ``faces_pred > 3 x faces_gt`` or > 50% of the planar faces are
   triangles (checked when the candidate has >= ``MIN_PLANAR`` planar faces);
-- units / scale: the sorted principal extents of the candidate are within 20% of the GT's
-  (rotation invariant, so it does not depend on the frame the agent modelled in; the GT is used
-  rather than the raw scan, whose extents include stray patches and scanner-table remnants);
-- non-parametric body: ``features.json`` missing (counts are never self-reported) or its
-  ``unmapped`` non-empty.
+- units / scale (rotation invariant, so independent of the frame the agent modelled in): the
+  linear volume scale ``cbrt(V_pred / V_gt)`` within ``bbox_rel_tol`` of 1 (an inch/mm slip is
+  25.4x; also a volume sanity check, so a thin hollow skin cannot hide behind surface distance);
+- ``features.json`` readable (UTF-8, a BOM is accepted), valid against the spec ``features``
+  schema (incl. the ``count`` consistency rule), present (counts are never self-reported) and its
+  ``unmapped`` empty (non-parametric body).
 
-Aligned check:
+Aligned checks:
+- bbox: per-axis extents of the aligned candidate (GT frame) within ``bbox_rel_tol`` of the GT's
+  (03_SCORING: "bbox within 20%"; done after alignment so it compares like with like; the GT is
+  used rather than the raw scan, whose extents include stray patches and scanner-table remnants);
 - freeform cover-up (tier 1-2 only): > 30% of the GT area that is plane / cylinder is matched
   (nearest candidate sample) to a B-spline / free-form candidate face.
 """
@@ -49,17 +54,11 @@ class GateResult:
         return "; ".join(self.reasons) if self.reasons else None
 
 
-def principal_extents(pts: np.ndarray) -> np.ndarray:
-    c = pts.mean(axis=0)
-    _, _, Vt = np.linalg.svd(pts - c, full_matrices=False)
-    proj = (pts - c) @ Vt.T
-    return np.sort(proj.max(axis=0) - proj.min(axis=0))[::-1]
-
-
 def static_gate(g: GateResult, *, n_solids: int, valid: bool, closed: bool,
                 recs: list[FaceRec] | None, n_triangles_planar: int, faces_gt: int,
-                pred_vertices: np.ndarray | None, gt_vertices: np.ndarray,
-                features: dict | None, cfg: EvalConfig) -> GateResult:
+                pred_volume: float | None, gt_volume: float, features: dict | None,
+                cfg: EvalConfig, n_shells: int = 1, features_error: str | None = None
+                ) -> GateResult:
     g.faces_gt = int(faces_gt)
     if n_solids != 1:
         g.fail("one_solid", f"{n_solids} solids (exactly 1 required)")
@@ -73,6 +72,11 @@ def static_gate(g: GateResult, *, n_solids: int, valid: bool, closed: bool,
         g.fail("closed", "open shell")
     else:
         g.passed("closed")
+    if n_solids == 1:
+        if n_shells != 1:
+            g.fail("b2", f"internal void (b2 != 0): the solid has {n_shells} shells")
+        else:
+            g.passed("b2")
     if recs is not None:
         g.faces_pred = len(recs)
         planar = sum(1 for r in recs if r.kind == "plane")
@@ -85,22 +89,38 @@ def static_gate(g: GateResult, *, n_solids: int, valid: bool, closed: bool,
             g.fail("faceted", f"faceted: {tri_share:.0%} of planar faces are triangles")
         else:
             g.passed("faceted")
-    if pred_vertices is not None and len(pred_vertices) >= 4:
-        ep, eg = principal_extents(pred_vertices), principal_extents(gt_vertices)
-        rel = np.abs(ep - eg) / np.maximum(eg, 1.0)
-        g.checks["extent_rel_err"] = [round(float(x), 6) for x in rel]
-        if float(rel.max()) > cfg.bbox_rel_tol:
-            g.fail("bbox", f"extents {np.round(ep, 2).tolist()} vs GT {np.round(eg, 2).tolist()}"
-                           f" (> {cfg.bbox_rel_tol:.0%}; units?)")
+    if pred_volume is not None and gt_volume > 0:
+        scale = (abs(pred_volume) / gt_volume) ** (1.0 / 3.0)
+        g.checks["volume_scale"] = round(float(scale), 6)
+        if abs(scale - 1.0) > cfg.bbox_rel_tol:
+            g.fail("volume", f"volume {abs(pred_volume):.6g} vs GT {gt_volume:.6g} mm3 (linear "
+                             f"scale {scale:.3f}, > {cfg.bbox_rel_tol:.0%}; units?)")
         else:
-            g.passed("bbox")
-    if features is None:
+            g.passed("volume")
+    if features_error is not None:
+        g.fail("features", features_error)
+    elif features is None:
         g.fail("features", "features.json missing (feature counts come from the adapter only)")
     elif features.get("unmapped"):
         items = ", ".join(str(x) for x in features["unmapped"][:3])
         g.fail("unmapped", f"non-parametric body: unmapped = [{items}]")
     else:
         g.passed("unmapped")
+    return g
+
+
+def bbox_gate(g: GateResult, pred_pts: np.ndarray, gt_pts: np.ndarray, cfg: EvalConfig
+              ) -> GateResult:
+    """Per-axis extents of the aligned candidate vs the GT (both in the GT frame)."""
+    ep = pred_pts.max(axis=0) - pred_pts.min(axis=0)
+    eg = gt_pts.max(axis=0) - gt_pts.min(axis=0)
+    rel = np.abs(ep - eg) / np.maximum(eg, 1.0)
+    g.checks["extent_rel_err"] = [round(float(x), 6) for x in rel]
+    if float(rel.max()) > cfg.bbox_rel_tol:
+        g.fail("bbox", f"aligned extents {np.round(ep, 2).tolist()} vs GT "
+                       f"{np.round(eg, 2).tolist()} (> {cfg.bbox_rel_tol:.0%}; units?)")
+    else:
+        g.passed("bbox")
     return g
 
 

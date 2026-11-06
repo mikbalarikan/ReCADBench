@@ -3,7 +3,8 @@
 Key dims are measured **intrinsically** on the aligned candidate B-rep (radii, plane-to-plane,
 axis-to-axis distances), so residual alignment error does not count against the agent. Each
 dim's faces are found as the nearest face of the same type to the GT ``near_point``, with the
-axis within ``axis_tol_deg`` of ``axis_dir`` when given.
+axis within ``axis_tol_deg`` of ``axis_dir`` when given, and no farther than ``max_dist`` (a
+missing feature is not measured on a duplicate somewhere else on the part).
 
 Points without GT standard dims (``key_dims.standard: true``): the 4 standard-value points then
 follow the key-dim fraction (the credit is neither free nor lost); likewise the 4 relation points
@@ -67,9 +68,12 @@ def _axis_ok(rec: FaceRec, axis_dir, tol_deg: float) -> bool:
 
 
 def find_face(
-    recs: list[FaceRec], point, face_type: str | None, axis_dir=None, tol_deg: float = 2.0
+    recs: list[FaceRec], point, face_type: str | None, axis_dir=None, tol_deg: float = 2.0,
+    max_dist: float | None = None,
 ) -> tuple[FaceRec | None, float, np.ndarray | None]:
-    """Nearest face of ``face_type`` (axis within ``tol_deg``) to ``point``; (rec, dist, foot)."""
+    """Nearest face of ``face_type`` (axis within ``tol_deg``) to ``point``; (rec, dist, foot).
+
+    With ``max_dist``, a nearest face farther than that is no match: ``(None, dist, None)``."""
     p = np.asarray(point, dtype=float)
     best: tuple[FaceRec | None, float, np.ndarray | None] = (None, math.inf, None)
     for r in recs:
@@ -80,7 +84,15 @@ def find_face(
         d, foot = point_face_distance(p, r)
         if d < best[1] - 1e-12:
             best = (r, d, foot)
+    if max_dist is not None and best[0] is not None and best[1] > max_dist:
+        return None, best[1], None
     return best
+
+
+def _missing(ftype, dist: float, what: str = "") -> str:
+    if math.isfinite(dist):
+        return f"no {what}{ftype} face near near_point (nearest at {dist:.3f} mm)"
+    return f"no {what}{ftype} face found"
 
 
 def _radius_at(rec: FaceRec, foot: np.ndarray) -> float:
@@ -106,14 +118,16 @@ def _same_axis(a: FaceRec, b: FaceRec, tol_mm: float, tol_deg: float) -> bool:
     return _line_distance(a.origin, a.axis, b.origin) <= tol_mm
 
 
-def measure_dim(dim: dict, recs: list[FaceRec], cfg: EvalConfig) -> tuple[float | None, str]:
+def measure_dim(dim: dict, recs: list[FaceRec], cfg: EvalConfig,
+                max_dist: float | None = None) -> tuple[float | None, str]:
     """Measure one key dim on a candidate (GT frame). Returns (value or None, note)."""
     m = dim.get("measure") or {}
     kind = dim["kind"]
     ftype = m.get("face_type")
-    a, da, pa = find_face(recs, m["near_point"], ftype, m.get("axis_dir"), cfg.axis_tol_deg)
+    a, da, pa = find_face(recs, m["near_point"], ftype, m.get("axis_dir"), cfg.axis_tol_deg,
+                          max_dist)
     if a is None:
-        return None, f"no {ftype} face found"
+        return None, _missing(ftype, da)
     if kind in ("diameter", "radius"):
         r = _radius_at(a, pa)
         return (2.0 * r if kind == "diameter" else r), f"face {a.index} at {da:.3f} mm"
@@ -124,9 +138,9 @@ def measure_dim(dim: dict, recs: list[FaceRec], cfg: EvalConfig) -> tuple[float 
     if kind == "axis_distance":
         stype = sec.get("face_type", ftype)
     b, db, pb = find_face(recs, sec["near_point"], stype, sec.get("axis_dir", m.get("axis_dir"))
-                          if kind == "axis_distance" else None, cfg.axis_tol_deg)
+                          if kind == "axis_distance" else None, cfg.axis_tol_deg, max_dist)
     if b is None:
-        return None, f"no second {stype} face found"
+        return None, _missing(stype, db, "second ")
     note = f"faces {a.index}/{b.index} at {da:.3f}/{db:.3f} mm"
     if b.index == a.index and kind != "angle":
         return None, note + " (both ends on the same face)"
@@ -155,11 +169,11 @@ def measure_dim(dim: dict, recs: list[FaceRec], cfg: EvalConfig) -> tuple[float 
     return 0.5 * (d1 + d2), note
 
 
-def measure_key_dims(key_dims: dict, recs: list[FaceRec], tol: float, cfg: EvalConfig
-                     ) -> list[DimResult]:
+def measure_key_dims(key_dims: dict, recs: list[FaceRec], tol: float, cfg: EvalConfig,
+                     max_dist: float | None = None) -> list[DimResult]:
     out = []
     for dim in key_dims.get("dims") or []:
-        val, note = measure_dim(dim, recs, cfg)
+        val, note = measure_dim(dim, recs, cfg, max_dist)
         nom = float(dim["nominal"])
         err = None if val is None else val - nom
         # within the class tolerance, limits included (ISO reading of +-tol)
@@ -219,14 +233,20 @@ def symmetry_planes(gt_surface: Surface, gt_pts: np.ndarray, cfg: EvalConfig
 
 def relations(gt_recs: list[FaceRec], pred_recs: list[FaceRec], gt_surface: Surface,
               gt_pts: np.ndarray, pred_surface: Surface, pred_pts: np.ndarray, band: float,
-              cfg: EvalConfig) -> list[dict]:
+              cfg: EvalConfig, max_dist: float | None = None) -> list[dict]:
     """GT-coaxial groups stay coaxial (< coaxial_tol_mm), GT symmetry planes stay symmetric
-    (mirrored candidate samples within ``band`` at p95)."""
+    (mirrored candidate samples within ``band`` at p95). With ``max_dist``, a candidate face
+    only matches a GT face if it lies within ``max_dist`` of where the GT face is (measured
+    from the same probe point, which for a full cylinder is on its axis)."""
     rel: list[dict] = []
     for g in coaxial_groups(gt_recs, cfg)[: cfg.max_relations]:
         matched = []
         for r in g:
-            m, _, _ = find_face(pred_recs, _face_probe(r), r.kind, r.axis, cfg.axis_tol_deg)
+            probe = _face_probe(r)
+            lim = None
+            if max_dist is not None:
+                lim = point_face_distance(probe, r)[0] + max_dist
+            m, _, _ = find_face(pred_recs, probe, r.kind, r.axis, cfg.axis_tol_deg, lim)
             if m is not None and m.axis is not None:
                 matched.append(m)
         ok = len(matched) == len(g) and all(
@@ -261,7 +281,7 @@ def score_s3(dims: list[DimResult], rels: list[dict]) -> tuple[float, dict]:
 
 
 # ------------------------------------------------------------------- dim -> face movement map
-def dim_handle(dim: dict, recs: list[FaceRec], cfg: EvalConfig
+def dim_handle(dim: dict, recs: list[FaceRec], cfg: EvalConfig, max_dist: float | None = None
                ) -> tuple[FaceRec, np.ndarray, float] | None:
     """The face that changes a key dim and how: ``(face, point on it, k)`` such that moving the
     face by ``k * dx`` along its outward normal changes the dim by ``dx`` (positive outward
@@ -270,7 +290,7 @@ def dim_handle(dim: dict, recs: list[FaceRec], cfg: EvalConfig
     m = dim.get("measure") or {}
     kind = dim["kind"]
     a, _, pa = find_face(recs, m["near_point"], m.get("face_type"), m.get("axis_dir"),
-                         cfg.axis_tol_deg)
+                         cfg.axis_tol_deg, max_dist)
     if a is None:
         return None
     if kind in ("diameter", "radius"):
@@ -295,7 +315,7 @@ def dim_handle(dim: dict, recs: list[FaceRec], cfg: EvalConfig
         if "near_point" not in sec:
             return None
         b, _, pb = find_face(recs, sec["near_point"], sec.get("face_type", m.get("face_type")),
-                             None, cfg.axis_tol_deg)
+                             None, cfg.axis_tol_deg, max_dist)
         if b is None or b.index == a.index:
             return None
         nb = outward_normal(b, pb)
