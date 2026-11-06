@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..gate_hook import Gate
+from ..gate_key import GATE_ENV, scrub
 from .mcp_client import McpError, McpServer
 
 MAX_READ_LINES = 2000
@@ -78,8 +79,9 @@ class Dispatcher:
         if start_servers:
             for name, c in self._cfg.items():
                 if name not in self.servers:
-                    e = dict(self.env)
+                    e = scrub(dict(self.env))  # MCP servers run agent code: no gate secrets
                     e.update(c.get("env") or {})
+                    e = {k: v for k, v in e.items() if k not in GATE_ENV or not v}
                     self.servers[name] = McpServer(name, c["command"], c.get("args") or [],
                                                    env=e, cwd=self.run)
 
@@ -160,16 +162,27 @@ class Dispatcher:
                      encoding="utf-8", newline="\n")
         return ToolResult(True, f"edited {p.relative_to(self.run).as_posix()}")
 
+    def _inside(self, q: Path) -> bool:
+        try:
+            q.resolve().relative_to(self.run)
+            return True
+        except (ValueError, OSError):
+            return False
+
     def _t_Glob(self, a: dict) -> ToolResult:
         base = self._p(a.get("path") or ".")
-        hits = sorted(q.relative_to(self.run).as_posix() for q in base.glob(a["pattern"])
-                      if q.is_file())
+        # second line of defence behind the gate's pattern check: never list outside the run
+        hits = sorted(q.resolve().relative_to(self.run).as_posix()
+                      for q in base.glob(a["pattern"]) if q.is_file() and self._inside(q))
         return ToolResult(True, "\n".join(hits[:500]) or "(no matches)")
 
     def _t_Grep(self, a: dict) -> ToolResult:
         rx = re.compile(a["pattern"])
         base = self._p(a.get("path") or ".")
-        files = [base] if base.is_file() else sorted(q for q in base.rglob("*") if q.is_file())
+        if not self._inside(base):
+            return ToolResult(False, "path outside the run dir")
+        files = [base] if base.is_file() else sorted(q for q in base.rglob("*")
+                                                     if q.is_file() and self._inside(q))
         out = []
         for f in files:
             if a.get("glob") and not fnmatch.fnmatch(f.name, a["glob"]):
@@ -195,7 +208,7 @@ class Dispatcher:
         toks = shlex.split(a["command"])
         toks[0] = shutil.which(toks[0], path=self.env.get("PATH")) or toks[0]
         timeout = float(a.get("timeout") or 900)
-        p = subprocess.run(toks, cwd=self.run, env=self.env, capture_output=True, text=True,
+        p = subprocess.run(toks, cwd=self.run, env=scrub(self.env), capture_output=True, text=True,
                            timeout=timeout)
         text = (p.stdout + ("\n" + p.stderr if p.stderr else "")).strip()
         return ToolResult(p.returncode == 0, f"exit {p.returncode}\n{text}"[:TEXT_LIMIT])

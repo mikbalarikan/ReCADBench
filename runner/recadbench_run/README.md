@@ -86,9 +86,41 @@ runner-level scan-code patterns).
    (N, sha256 of `cad/` sources). After the sources changed, the next such call AND every
    model-mutating tool (`backend.yaml: cad_prefixes.mutating`: `execute`, `restore_snapshot`,
    `edit_feature`, `reset`, ...) needs N+1. Read-only tools need only a valid plan.
-8. Gate state integrity: `.recadbench/gate_state.json` plus its sha256 outside the run dir
-   (`RECADBENCH_GATE_DIGEST_DIR`, default `<runs>/.recadbench-gate/`); a mismatch (overwritten,
-   deleted) closes CAD execution and makes finish refuse. compose resets it.
+8. Gate state integrity: `.recadbench/gate_state.json` is authenticated by an HMAC-SHA256 under
+   a per-run key (`gate_key.py`) kept in the runner-private key store, never in the run dir; a
+   state that does not verify (overwritten, deleted, forged, no key) closes CAD execution and
+   makes finish refuse. compose creates the key.
+9. CAD code policy (`backends/recad_cli/code_policy.py`): an AST allow-list over build123d
+   session code, `execute_file` bodies and every `.py` under `cad/` / unpinned `lib/`, and over
+   NX journals plus every `.py` of the run dir (the same code runs in `recadbench nx-run` and in
+   the finish sandbox). Skillset files compose copied are trusted while their sha256 equals the
+   MAC-checked compose manifest (`.recadbench/compose_files.json`).
+10. Glob / Grep: a glob pattern (Glob `pattern`, Grep `glob`) with `..`, `~`, a drive, UNC, `//`
+    or an absolute part anywhere is denied; a path field with a `..` segment too.
+
+## Security model
+
+The benchmark is only meaningful if the agent reconstructs the part from the scan, so the
+runner keeps the agent away from the ground truth (GT) and from the scoring machinery. Agent
+code runs as the same OS user as the runner, and Python cannot be confined by inspecting its
+source, so the runner layers independent checks; each layer has its own tests
+(`runner/tests/test_review_h8_fix2.py`, `backends/tests/test_code_policy.py`,
+`evaluator/tests/test_gt_copy.py`).
+
+| Layer | Covers | Residual risk |
+|---|---|---|
+| 1. Gate (`gate_hook.py`) on every tool call | shell, web, foreign MCP tools; every path argument inside the run dir; Glob / Grep patterns in full; writes only under `plan/ cad/ out/ work/`; plan before CAD, N+1 revision rule; scan-reading code (`denied_tools`, scan patterns) | it sees tool arguments, not what code does at run time (layer 2) |
+| 2. CAD code policy (`code_policy.py`) in the gate, `nx-run` and the finish sandbox | AST allow-list: allow-listed imports only (no `io os sys pathlib shutil glob hashlib zipfile zipimport importlib operator string inspect ...`), no `open exec eval compile __import__ getattr setattr vars globals locals chr bytes`, no attribute starting with `_`, no frame / generator / code attributes, no file / import / export / process / journal verbs in attribute or imported names (`import_step`, `export_stl`, `Read_s`, `DexManager`, `Execute`, `Open`, `Save`, `WriteLine`), no string literal holding `__`, no `match` / `async` / relative imports | the CAD libraries' own APIs are large (build123d, OCP, NX Open): a function that reads or writes files under a name the word list does not catch, or a C-level gadget, would pass. The policy narrows the surface; it is not a proof |
+| 3. Gate state integrity (`gate_key.py`) | the D6 revision rule cannot be bypassed by rewriting `gate_state.json`: HMAC under a per-run key in `RECADBENCH_GATE_KEY_DIR` (random entry names), never in the run dir; the key-store location is removed from every process that runs agent code (CAD MCP servers via `.mcp.json`, the dispatcher, `nx-run`'s NX process, finish's export / extract); the compose manifest is MAC'd too | code that escapes layer 2 runs as the same user and can list the key dir (default `~/.recadbench-private/gate-keys` is guessable; a random `RECADBENCH_GATE_KEY_DIR` only raises the bar) |
+| 4. finish (`finish.py`) | extracts only after `finish_check` (state verifies, plan valid, source executed through the gate and unchanged, native + importables pass layer 2, no file appeared or changed outside `plan/ cad/ out/ work/` since compose); a COPY of `cad/` + `lib/`, `python -I`, cwd an empty temp dir, no secrets in the env, `RECAD_SANDBOX=1` (AST check + builtins without `open` / `getattr` / real `__import__`, empty cwd) | the export process is still an ordinary process of the same user |
+| 5. Evaluator GT-copy backstop (`recadbench_eval.gate.gt_copy_gate`) | a prediction whose volume (1e-3) and face count (5 %) equal the GT's AND whose two-way P95 is below 0.2 x max(scan floor P95, class tight band) fails the gate as `suspected GT copy` (outside Track T); measurements always in `result.json` `details.gt_copy` | a copy that is deliberately perturbed (scaled, re-faceted, a feature added) is not caught; conversely a perfect design-intent rebuild of a simple part whose B-rep matches the GT face for face would be flagged (review it by hand) |
+
+**Owner action required before unattended runs** (not done by the runner, and not by this PR):
+run the agent session, its MCP servers and NX under a separate Windows user that has NO read
+access to `ReCADBench-gt` (and to the gate key dir), or keep the GT store off the agent hosts
+entirely (GT only on the evaluator host, scoring via the queue). Set `RECADBENCH_GATE_KEY_DIR`
+to a random runner-private folder. Without that, layers 1-5 are defence in depth against a
+benchmark-gaming agent, not isolation against a determined one.
 
 ## Track T frames
 

@@ -14,7 +14,8 @@ from recadbench_eval.parsimony import ratio_curve
 from recadbench_eval.plan_score import plan_score
 from recadbench_eval.topology import tvd
 
-CFG = EvalConfig(n_samples=8000, icp_samples=4000)
+# candidates are gt.step by construction: GT-copy backstop off (tests: test_gt_copy.py)
+CFG = EvalConfig(n_samples=8000, icp_samples=4000, gt_copy_check=False)
 
 
 # ------------------------------------------------------------------------------ geometry
@@ -174,7 +175,7 @@ def test_s5_behind_flag(gt_env, tmp_path):
     off = score_run(d, "syn_scan", CFG)
     assert off["scores"]["S5"] is None
     on = score_run(d, "syn_scan", EvalConfig.with_overrides(n_samples=8000, icp_samples=4000,
-                                                             s5=True))
+                                                             s5=True, gt_copy_check=False))
     rows = on["details"]["S5"]["edits"]
     assert [r["ok"] for r in rows] == [True, False, False]
     assert on["scores"]["S5"] == pytest.approx(5 / 3)
@@ -193,7 +194,9 @@ def test_cli_score_report_plan(gt_env, tmp_path, capsys):
     (d / "plan").mkdir()
     (d / "plan" / "re_plan.v1.json").write_text(json.dumps(part.plan), encoding="utf-8")
     cfgf = tmp_path / "eval.yaml"
-    cfgf.write_text("n_samples: 6000\nicp_samples: 3000\n", encoding="utf-8")
+    # the lego candidate is gt.step geometry: GT-copy backstop off (tests: test_gt_copy.py)
+    cfgf.write_text("n_samples: 6000\nicp_samples: 3000\ngt_copy_check: false\n",
+                    encoding="utf-8")
     assert main(["score", "--run-dir", str(d), "--part", "syn_clean", "--config", str(cfgf)]) == 0
     res = json.loads((d / "result.json").read_text(encoding="utf-8"))
     assert res["scores"]["total"] == 40.0 and res["scores"]["plan_score"] == 100.0

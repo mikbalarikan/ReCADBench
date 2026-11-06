@@ -41,7 +41,8 @@ import yaml
 
 from . import __version__
 from .budgets import Budgets
-from .gate_hook import BACKEND_FILE, GATE_FILE, STATE_DIR, clear_digest, load_policy
+from .gate_hook import BACKEND_FILE, GATE_FILE, STATE_DIR, load_policy, write_compose_manifest
+from .gate_key import GATE_ENV, RunKey
 from .sources import Source, SourceError, default_tag_ref
 
 SKILLSET_RE = re.compile(r"^(?P<b>[a-z0-9]+)@(?P<v>v[0-9]+)$")
@@ -253,7 +254,7 @@ def compose(req: ComposeRequest) -> Path:
         if not req.force:
             raise ComposeError(f"{out} exists and is not empty (use --force)")
         shutil.rmtree(out)
-    clear_digest(out)
+    key = RunKey.create(out)  # a fresh gate secret (runner-private key store)
     # -- skillset / backend
     if req.skillset == "none":
         backend = req.backend or "none"
@@ -396,13 +397,15 @@ def compose(req: ComposeRequest) -> Path:
     mcp: dict[str, dict] = {}
     if retk_tools:
         mcp["retk"] = {"type": "stdio", "command": _mcp_command("retk-server"),
-                       "args": ["--tools", ",".join(retk_tools)]}
+                       "args": ["--tools", ",".join(retk_tools)],
+                       "env": {k: "" for k in GATE_ENV}}
     iface = bman.get("interface") or {}
     if iface.get("kind") == "mcp":
         cfg = iface["mcp"]
         prefix = iface["cad_prefixes"]["all"][0]
         server = prefix[len("mcp__"):].rstrip("_")
-        env = {}
+        # the CAD server runs agent code: no gate key-store location in its environment
+        env = {k: "" for k in GATE_ENV}
         if libs:
             env["PYTHONPATH"] = str(out / "lib")
         mcp[server] = {"type": "stdio", "command": _mcp_command(cfg["command"]),
@@ -491,7 +494,11 @@ def compose(req: ComposeRequest) -> Path:
                               allow_seed=track == "T")
         if leaks:
             shutil.rmtree(out, ignore_errors=True)
+            key.delete()
             raise ComposeError("ground truth reached the run dir: " + "; ".join(leaks))
+    # last: the list of every file compose wrote, MAC'd with the run key (finish refuses files
+    # that appear or change outside plan/ cad/ out/ work/; the gate trusts unchanged lib/)
+    write_compose_manifest(out, key)
     return out
 
 

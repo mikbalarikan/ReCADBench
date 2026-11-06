@@ -67,7 +67,7 @@ def test_oracle_build123d_replay_end_to_end(world):
     assert res.efficiency["gate_denials"] == 1  # the scripted scan-import probe
     assert res.efficiency["turns"] == 8
     out = finish(run, efficiency=res.efficiency, score=True)
-    assert out["ok"], out
+    assert out["ok"], json.dumps(out["finish"])
     assert out["finish"]["extract"]["ok"] and out["finish"]["extract"]["unmapped"] == 0
     assert out["score"]["ok"], out["score"]
     m = json.loads((run / "run_manifest.json").read_text(encoding="utf-8"))

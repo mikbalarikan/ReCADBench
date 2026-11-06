@@ -18,6 +18,11 @@ file_tools:
   Grep: [path]
   LS: [path]
 write_tools: [Write, Edit, MultiEdit]
+# glob-pattern arguments: no '..', '~', drive, UNC or absolute part ANYWHERE in the pattern
+# (the path check above only sees the text before the first wildcard)
+glob_args:
+  Glob: [pattern]
+  Grep: [glob]
 shell_tools: [Bash, PowerShell, BashOutput, KillShell, KillBash, Monitor]
 
 # Run-dir paths the agent may read but never write (relative, POSIX; a trailing / = folder).
@@ -65,7 +70,7 @@ write_args:
 # .py) that name a path outside the run dir (absolute, ~, ..) or a protected run-dir path are
 # denied; so is any literal matching this pattern (the ground-truth store). Best effort: paths
 # built at runtime are not caught (STATUS: GT isolation needs OS isolation).
-gt_name_pattern: '(?i)recadbench[-_]gt\b|RECADBENCH_GT|\bgt(?:_native)?\.(?:step|stp|prt)\b|\bgt_plan(?:\.json)?\b|\bkey_dims\.ya?ml\b|\bregistration\.json\b'
+gt_name_pattern: '(?i)recadbench[-_]gt\b|RECADBENCH_GT|recadbench-private|gate-keys|RECADBENCH_GATE|\bgt(?:_native)?\.(?:step|stp|prt)\b|\bgt_plan(?:\.json)?\b|\bkey_dims\.ya?ml\b|\bregistration\.json\b'
 
 # Harness levels (04_STRATEGIES): the retk tools each level allows; a strategy's toolkit_tools is
 # intersected with this. Default level of compose: H1 (04_STRATEGIES).
@@ -101,6 +106,10 @@ scan_code_patterns:
 backends:
   build123d:
     native_file: cad/part.py
+    # CAD code policy profiles (backends/recad_cli/code_policy.py): session code + cad/ lib/,
+    # and the finish-time native file
+    code_policy: build123d
+    native_policy: build123d_native
     source_globs: ["*.py"]
     source_tools:
       mcp__build123d__execute_file: {path_arg: path}
@@ -112,6 +121,7 @@ backends:
       mcp__build123d__execute_file: {path_arg: path, as_tool: mcp__build123d__execute, code_arg: code}
   nx:
     native_file: cad/part.prt
+    code_policy: nx
     source_globs: ["*.py"]
     # kind cli: the allowed command is the source tool; its journal is argument 3
     nx_run_flags: ["--timeout"]

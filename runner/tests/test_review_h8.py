@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 from recadbench_run.compose import ComposeError, ComposeRequest, compose
 from recadbench_run.finish import clean_env, finish
-from recadbench_run.gate_hook import STATE_FILE, Gate, digest_path
+from recadbench_run.gate_hook import STATE_FILE, Gate
+from recadbench_run.gate_key import RunKey, key_dir
 from runner_helpers import content_repos, git, mini_run, plan_doc, write_plan
 
 PART = "syn_part"
@@ -81,15 +83,20 @@ def test_finish_runs_native_code_sandboxed_without_secrets(tmp_path, repos, monk
     run = t_run(tmp_path, repos)
     leak = ("import os\nfrom build123d import Box\n"
             "n = len(os.environ.get('RECADBENCH' + '_GT_DIR', ''))\npart = Box(1 + n, 1, 1)\n")
-    gated(run, leak)
+    # fix2: the CAD code policy already denies it at the gate (os is not on the allow-list)
+    write_part(run, leak)
+    d = Gate(run)("mcp__build123d__execute_file", {"path": "cad/part.py"})
+    assert not d.allow and d.category == "scan_code" and "import of 'os'" in d.reason
+    # and the finish sandbox refuses it on its own
     monkeypatch.setenv("RECADBENCH_GT_DIR", str(tmp_path / "gtstore"))
-    res = finish(run)
-    assert not res["ok"]
-    assert "sandbox" in res["finish"]["export"]["error"]
-    assert not (run / "out" / "output.step").exists()
+    from recadbench_run.finish import extract_isolated
+
+    rep = extract_isolated(run, "build123d", "cad/part.py", 600)
+    assert not rep["export"]["ok"] and "sandbox" in rep["export"]["error"]
+    assert rep["_step"] is None
     env = clean_env()
     assert "RECADBENCH_GT_DIR" not in env and env["RECAD_SANDBOX"] == "1"
-    assert "PYTHONPATH" not in env
+    assert "PYTHONPATH" not in env and "RECADBENCH_GATE_KEY_DIR" not in env
 
 
 def test_finish_ignores_a_planted_recad_cli_package(tmp_path, repos):
@@ -107,9 +114,16 @@ def test_finish_ignores_a_planted_recad_cli_package(tmp_path, repos):
         "print(json.dumps({'ok': True, 'count': 1, 'unmapped': 0, 'solids': 1}))\n",
         encoding="utf-8")
     res = finish(run)
-    assert res["ok"], res
-    assert (run / "out" / "output.step").read_text(encoding="utf-8").startswith("ISO-10303-21")
-    assert json.loads((run / "out" / "features.json").read_text(encoding="utf-8"))["count"] == 1
+    # fix2: a file that appears outside plan/ cad/ out/ work/ refuses the extraction ...
+    assert not res["ok"] and "recad_cli/__main__.py (new)" in res["finish"]["error"]
+    assert not (run / "out" / "output.step").exists()
+    # ... and without that check (the extraction alone) the package is never imported
+    # (python -I, cwd an empty temp dir)
+    from recadbench_run.finish import extract_isolated
+
+    rep = extract_isolated(run, "build123d", "cad/part.py", 600)
+    assert rep["export"]["ok"] and rep["_step"].startswith(b"ISO-10303-21")
+    assert json.loads(rep["_features"].decode("utf-8"))["count"] == 1
 
 
 def test_finish_refuses_a_tampered_gate_state(tmp_path, repos):
@@ -131,7 +145,8 @@ def test_gate_state_overwrite_or_delete_is_detected(tmp_path):
     write_part(run)
     g = Gate(run)
     assert g("mcp__build123d__execute_file", {"path": "cad/part.py"}).allow
-    assert digest_path(run).is_file() and not str(digest_path(run)).startswith(str(run))
+    key = RunKey.load(run)
+    assert key is not None and key.doc["state_mac"] and not str(key.path).startswith(str(run))
     (run / STATE_FILE).write_text(json.dumps({"executed": None, "history": []}),
                                   encoding="utf-8")
     assert g.state().get("tampered")
@@ -287,9 +302,13 @@ def test_nx_ordinary_journal_stays_allowed(tmp_path):
     run = mini_run(tmp_path, "nx")
     write_plan(run, 1)
     (run / "cad" / "step_01.py").write_text(
-        NX_SMOKE_JOURNAL + "import os, re, math\nname = os.path.join('cad', 'part.prt')\n"
+        NX_SMOKE_JOURNAL + "import re, math\nname = '/'.join(['cad', 'part.prt'])\n"
         "rx = re.compile(r'^\\s*M(\\d+)')\n", encoding="utf-8")
     assert Gate(run).check("Bash", {"command": "recadbench nx-run cad/step_01.py"}).allow
+    # fix2 (CAD code policy): os is not part of a journal's allow-list any more
+    (run / "cad" / "step_01.py").write_text(NX_SMOKE_JOURNAL + "import os\n", encoding="utf-8")
+    d = Gate(run).check("Bash", {"command": "recadbench nx-run cad/step_01.py"})
+    assert not d.allow and "import of 'os'" in d.reason
 
 
 # ================================================================ compose labels / pins
@@ -392,13 +411,14 @@ def test_nx_smoke_replay_script_is_built_in():
     assert "nx_smoke" in SCRIPTS and load("nx_smoke") is SCRIPTS["nx_smoke"]
 
 
-def test_digest_dir_is_outside_the_run(tmp_path, monkeypatch):
-    """The digest dir can be pinned (RECADBENCH_GATE_DIGEST_DIR); default is outside the run,
-    where every gated path argument is denied."""
-    monkeypatch.setenv("RECADBENCH_GATE_DIGEST_DIR", str(tmp_path / "dg"))
+def test_key_store_is_outside_the_run(tmp_path, monkeypatch):
+    """The key store is RECADBENCH_GATE_KEY_DIR (default under the user's home), outside the
+    run, where every gated path argument is denied."""
+    monkeypatch.setenv("RECADBENCH_GATE_KEY_DIR", str(tmp_path / "keys"))
     run = mini_run(tmp_path)
-    assert digest_path(run).parent == tmp_path / "dg"
-    monkeypatch.delenv("RECADBENCH_GATE_DIGEST_DIR")
-    assert digest_path(run).parent == run.parent / ".recadbench-gate"
-    rel = os.path.relpath(digest_path(run), run)
+    key = RunKey.load(run)
+    assert key.path.parent == key_dir() == tmp_path / "keys"
+    rel = os.path.relpath(key.path, run)
     assert not Gate(run).check("Read", {"file_path": rel}).allow
+    monkeypatch.delenv("RECADBENCH_GATE_KEY_DIR")
+    assert key_dir() == Path.home() / ".recadbench-private" / "gate-keys"

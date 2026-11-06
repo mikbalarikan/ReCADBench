@@ -71,16 +71,20 @@ def run_script(path: str, source: str | None = None, trace: bool = False):
 
     sandbox = os.environ.get("RECAD_SANDBOX") == "1"
     bi = __builtins__
+    cwd_ctx: contextlib.AbstractContextManager = contextlib.nullcontext()
     if sandbox:  # recadbench finish: agent-written code (b3d_sandbox.py)
-        from b3d_sandbox import SandboxError, check_source, restricted_builtins
+        from b3d_sandbox import SandboxError, check_source, restricted_builtins, sandbox_cwd
 
         try:
             check_source(src, path)
         except SandboxError as exc:
             raise RunError(f"sandbox: {exc}") from exc
         bi = restricted_builtins()
-    g = {"__name__": "__recad_native__", "__file__": path, "__builtins__": bi,
-         "show": show, "show_object": show}
+        cwd_ctx = sandbox_cwd()  # relative paths in the script name an empty temp dir
+    g = {"__name__": "__recad_native__", "__builtins__": bi, "show": show,
+         "show_object": show}
+    if not sandbox:
+        g["__file__"] = path
     code = compile(src, path, "exec")
     script_dir = os.path.dirname(path)
     # sandbox: the native file is self-contained, nothing next to it is importable
@@ -90,7 +94,7 @@ def run_script(path: str, source: str | None = None, trace: bool = False):
     before = set(sys.modules)
     stdout = io.StringIO()
     try:
-        with contextlib.redirect_stdout(stdout):
+        with cwd_ctx, contextlib.redirect_stdout(stdout):
             if tracer is not None:
                 with tracer:
                     exec(code, g)  # executing the native model is the job

@@ -240,10 +240,16 @@ def test_ordinary_modelling_code_stays_allowed(tmp_path):
     g, run = gate(tmp_path)
     write_plan(run, 1)
     code = ("points = [(0, 0), (1, 0), (1, 1)]  # mesh of points in a comment\n" + PART +
-            "export_stl(part, 'out/preview.stl')\n")
+            "step = 2.5  # a variable named step\n")
     (run / "cad" / "part.py").write_text(code, encoding="utf-8")
     assert g("mcp__build123d__execute_file", {"path": "cad/part.py"}).allow
     assert g("mcp__build123d__execute", {"code": code}).allow
+    # fix2: build123d's own writers / readers are not available in agent code (the export tool,
+    # with its gated filename, is)
+    for line in ("export_stl(part, 'out/preview.stl')", "export_step(part, 'out/x.step')",
+                 "p2 = import_step('cad/m.step')", "part.export_brep('out/x.brep')"):
+        d = g("mcp__build123d__execute", {"code": PART + line + "\n"})
+        assert not d.allow and d.category == "code_policy", line
 
 
 def test_comments_do_not_trigger_code_patterns(tmp_path):

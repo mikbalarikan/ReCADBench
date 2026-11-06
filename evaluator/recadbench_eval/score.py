@@ -28,7 +28,7 @@ from . import __version__, brep, gtstore
 from .align import align
 from .config import CLASS_KEYDIM_TOL, EvalConfig, bands
 from .deviation import Bands, effective_bands, observable_labels, s1
-from .gate import GateResult, bbox_gate, freeform_gate, static_gate
+from .gate import GateResult, bbox_gate, freeform_gate, gt_copy_gate, static_gate
 from .geom import Samples, Surface, sample
 from .intent import measure_key_dims, relations, score_s3
 from .parsimony import s2
@@ -287,8 +287,15 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     res["gate"] = {"ok": True, "faces_pred": g.faces_pred, "faces_gt": g.faces_gt}
     details["gate"] = {"checks": g.checks, "reasons": []}
 
-    # ---- S1
+    # ---- S1 (and the GT-copy backstop, which needs its two-way distances)
     r1 = s1(ctx.samples, ctx.observable, ctx.surface, psmp, psurf, ctx.bands, cfg)
+    details["gt_copy"] = gt_copy_gate(
+        g, pred_volume=brep.volume(pred_one), gt_volume=ctx.volume, faces_pred=len(recs),
+        faces_gt=int(meta["faces_gt"]), p95_all=r1["p95_all"], floor_p95=ctx.part.floor_p95,
+        tight_class=ctx.bands.tight_class, cfg=cfg, enforce=res["track"] != "T")
+    if not g.ok:
+        return _rnd(_zero(res, g, details))
+    details["gate"] = {"checks": g.checks, "reasons": []}
     for k in ("p_tight", "p_wide", "mean", "rms", "p95", "max", "hausdorff",
               "p_tight_inferred", "p_wide_inferred"):
         if r1.get(k) is not None:

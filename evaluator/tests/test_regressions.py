@@ -24,7 +24,9 @@ _syn = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_syn)
 HOLES, build_shape = _syn.HOLES, _syn.build_shape
 
-CFG = EvalConfig(n_samples=20000, icp_samples=8000)
+# golden / regression candidates are gt.step by construction: GT-copy backstop off (it has
+# its own tests in test_gt_copy.py)
+CFG = EvalConfig(n_samples=20000, icp_samples=8000, gt_copy_check=False)
 
 
 def _run(tmp_path, name, shape_gt, part, feats=None, raw: bytes | None = None):

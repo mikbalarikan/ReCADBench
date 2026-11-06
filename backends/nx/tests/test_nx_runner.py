@@ -44,6 +44,32 @@ def nx_run_cli(run_dir: Path, *args: str, env: dict | None = None) -> tuple[int,
     return proc.returncode, json.loads(lines[0])
 
 
+def harness_run(run_dir: Path, rel: str, env: dict | None = None,
+                timeout: float = 600.0) -> tuple[int, dict]:
+    """Trusted HARNESS journals (STEP import through DexManager, NX Open UF, the replay
+    helpers _nxr / _ir): the same NX wrapper as `recadbench nx-run`, without the agent CAD code
+    policy (which denies exactly those means), the way the adapter replays run. Returns the
+    nx-run summary and writes cad/last_run.json like the CLI."""
+    old = {k: os.environ.get(k) for k in (env or {})}
+    os.environ.update(env or {})
+    try:
+        last = nx_run.run_wrapped((run_dir / rel).resolve(),
+                                  (run_dir / "cad" / "part.prt").resolve(),
+                                  run_dir / "cad" / ".harness.json", timeout, None,
+                                  run_dir / "cad" / "logs" / "harness.log")
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    (run_dir / "cad" / "last_run.json").write_text(json.dumps(last), encoding="utf-8")
+    out = {k: last.get(k) for k in ("ok", "error", "saved", "count", "bodies", "volume",
+                                    "unmapped")}
+    out["features"] = [f["taxonomy_type"] for f in last.get("features") or [] if f["counted"]]
+    return (0 if last.get("ok") else 1), out
+
+
 def journal(run_dir: Path, name: str, body: str) -> str:
     (run_dir / "cad").mkdir(parents=True, exist_ok=True)
     (run_dir / "cad" / name).write_text(textwrap.dedent(body), encoding="utf-8")
@@ -225,7 +251,7 @@ assert new, "nothing imported"
     env = {}
     if not os.environ.get("UGII_BASE_DIR"):
         env["UGII_BASE_DIR"] = str(nx_run.find_run_journal().parent.parent)
-    rc, res = nx_run_cli(tmp_path, j, env=env)
+    rc, res = harness_run(tmp_path, j, env=env)
     last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
     assert last["ok"], last
     assert last["count"] == 1 and last["unmapped"], (
@@ -308,7 +334,7 @@ def test_union_with_unrelated_earlier_body_matches_build123d(tmp_path):
     for helper in ("_nxr.py", "_ir.py"):
         (tmp_path / "cad" / helper).write_bytes((NX / "replays" / helper).read_bytes())
     j = journal(tmp_path, "bool3.py", BOOL3)
-    rc, res = nx_run_cli(tmp_path, j)
+    rc, res = harness_run(tmp_path, j)
     assert rc == 0 and res["ok"], res
     assert abs(res["volume"] - 5200.0) < 1e-6 and res["bodies"] == 1
     assert res["count"] == 4 and res["unmapped"] == [], res
@@ -508,7 +534,7 @@ def test_surface_features_are_unmapped(tmp_path):
     """Class / FeatureType of the surface features the nx-surface-modeling skill teaches, measured
     on NX 2206: every one is unmapped with the v1 reason (spec 0.3.0 has no taxonomy type)."""
     j = journal(tmp_path, "surfaces.py", SURFACES)
-    rc, res = nx_run_cli(tmp_path, j)
+    rc, res = harness_run(tmp_path, j)
     last = json.loads((tmp_path / "cad" / "last_run.json").read_text())
     assert last["ok"] and last["saved"], last
     assert last["count"] == 1, last  # the block
@@ -568,7 +594,7 @@ def test_partial_circular_pattern_pitch_deg(tmp_path):
     for helper in ("_nxr.py", "_ir.py"):
         (tmp_path / "cad" / helper).write_bytes((NX / "replays" / helper).read_bytes())
     j = journal(tmp_path, "pitch.py", PITCH)
-    rc, res = nx_run_cli(tmp_path, j)
+    rc, res = harness_run(tmp_path, j)
     assert rc == 0 and res["ok"], res
     assert abs(res["volume"] - (21000 - 270 * math.pi)) < 1e-3, res
     assert res["features"] == ["extrude", "hole", "pattern_circular"], res

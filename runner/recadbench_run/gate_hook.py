@@ -44,12 +44,22 @@ Rules (the reason text of a denial tells the agent what to do):
 9. **Code literals**: a string literal in code that names a path outside the run dir, a
    protected run-dir path or the ground-truth store is denied (best effort).
 
-State lives in ``.recadbench/gate_state.json`` (written only by the gate). Its sha256 is also
-kept OUTSIDE the run dir (``RECADBENCH_GATE_DIGEST_DIR``, default
-``<run parent>/.recadbench-gate``); a state that does not match (overwritten, deleted, forged)
-marks the run as tampered: no further CAD execution, and ``finish`` refuses to extract.
-Every decision is appended to ``.recadbench/gate_log.jsonl``. :meth:`Gate.finish_check` is
-the check ``finish`` runs before it executes the native file.
+10. **CAD code policy** (``backends/recad_cli/code_policy.py``, shared with ``nx-run`` and the
+    finish sandbox): an AST allow-list for build123d code (``execute`` code, ``execute_file``
+    bodies, every ``.py`` under ``cad/`` and unpinned ``lib/``) and NX journals (every ``.py`` of
+    the run dir): no file / process / import-system / introspection access, no ``_``
+    attributes, no dunder strings. Skillset files compose copied (``lib/``, ``.claude/``) are
+    trusted while their sha256 equals the MAC-checked compose manifest.
+11. **Glob / Grep patterns**: no ``..``, ``~``, drive, UNC or absolute part anywhere in a glob
+    pattern or path field.
+
+State lives in ``.recadbench/gate_state.json`` (written only by the gate) and is authenticated by
+an HMAC under a per-run secret that never enters the run dir or the agent's environment
+(:mod:`recadbench_run.gate_key`); the MAC sits in the runner-private key store with the key. A
+state that does not verify (overwritten, deleted, forged, no key) marks the run as tampered: no
+further CAD execution, and ``finish`` refuses to extract. Every decision is appended to
+``.recadbench/gate_log.jsonl``. :meth:`Gate.finish_check` is the check ``finish`` runs before it
+executes the native file.
 """
 
 from __future__ import annotations
@@ -68,6 +78,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .gate_key import RunKey
+
 STATE_DIR = ".recadbench"
 GATE_FILE = f"{STATE_DIR}/gate.json"
 STATE_FILE = f"{STATE_DIR}/gate_state.json"
@@ -80,23 +92,45 @@ _ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|/|\\\\)")
 # a drive-root-relative Windows path in a code literal (\Users\x), not a regex such as r"\d+"
 _ROOTED = re.compile(r"^\\[\w .-]+(?:[\\/][\w .-]+)+[\\/]?$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
-DIGEST_ENV = "RECADBENCH_GATE_DIGEST_DIR"
+COMPOSE_MANIFEST = f"{STATE_DIR}/compose_files.json"
+STATE_MAC = "gate_state"
+MANIFEST_MAC = "compose_files"
+# a glob pattern / path field: no parent step, home, drive, UNC, // or absolute part anywhere
+_GLOB_BAD = re.compile(r"\.\.|~|[A-Za-z]:|\\\\|//|(?:^|[{,\s])[/\\]")
+# files the runtime (gate, finish, evaluator) writes outside plan/ cad/ out/ work/
+RUNTIME_FILES = frozenset({f"{STATE_DIR}/gate_state.json", f"{STATE_DIR}/gate_log.jsonl",
+                           f"{STATE_DIR}/run_job.json", f"{STATE_DIR}/transcript.jsonl",
+                           "efficiency.json", "result.json"})
+# run_manifest.json: compose writes it, finish rewrites it (and records the sha256 it wrote in
+# the key store), nothing else may change it
+MANIFEST_JSON = "run_manifest.json"
 
 
-def digest_path(run_dir: Path) -> Path:
-    """Where the gate keeps the sha256 of the run's gate_state.json: outside the run dir (the
-    gate denies every path there), one file per absolute run-dir path."""
-    run = Path(run_dir).resolve()
-    base = Path(os.environ[DIGEST_ENV]) if os.environ.get(DIGEST_ENV) else \
-        run.parent / ".recadbench-gate"
-    tag = hashlib.sha256(_norm(run).encode("utf-8")).hexdigest()[:16]
-    return base / f"{run.name}-{tag}.sha256"
+def _code_policy():
+    from recad_cli import code_policy
+
+    return code_policy
 
 
-def clear_digest(run_dir: Path) -> None:
-    """compose (and a forced re-run) start the state over."""
-    with contextlib.suppress(OSError):
-        digest_path(run_dir).unlink()
+def tree_files(run_dir: Path) -> dict[str, str]:
+    """``{run-relative posix path: sha256}`` of every file of a run dir (no ``__pycache__``)."""
+    out = {}
+    root = Path(run_dir)
+    for p in sorted(root.rglob("*")):
+        if p.is_file() and "__pycache__" not in p.parts:
+            out[p.relative_to(root).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return out
+
+
+def write_compose_manifest(run_dir: Path, key: RunKey) -> dict[str, str]:
+    """compose's last step: hash every file it wrote, MAC the list (key store)."""
+    run = Path(run_dir)
+    files = tree_files(run)
+    files.pop(COMPOSE_MANIFEST, None)
+    raw = (json.dumps({"files": files}, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    (run / COMPOSE_MANIFEST).write_bytes(raw)
+    key.set(manifest_mac=key.mac(MANIFEST_MAC, raw))
+    return files
 
 
 def _string_literals(text: str) -> list[str]:
@@ -244,8 +278,10 @@ class Gate:
     """Gate of one run dir. ``config`` defaults to ``<run>/.recadbench/gate.json``."""
 
     def __init__(self, run_dir: str | Path, config: dict | None = None,
-                 backend_manifest: dict | None = None, policy: dict | None = None):
+                 backend_manifest: dict | None = None, policy: dict | None = None,
+                 key: RunKey | None = None):
         self.run_dir = Path(run_dir).resolve()
+        self._key = key
         self.cfg = config if config is not None else json.loads(
             (self.run_dir / GATE_FILE).read_text(encoding="utf-8"))
         self.policy = policy or self.cfg.get("policy") or load_policy()
@@ -266,54 +302,113 @@ class Gate:
         self.gt_pattern = re.compile(gtp) if gtp else None
 
     # -- state
+    @property
+    def key(self) -> RunKey | None:
+        """The run's key-store entry (``None``: the run was not composed on this host, or its
+        key was removed)."""
+        if self._key is None:
+            self._key = RunKey.load(self.run_dir)
+        else:
+            self._key.refresh()
+        return self._key
+
     def state(self) -> dict:
-        """The gate state; ``{"tampered": True, ...}`` when gate_state.json does not match the
-        digest the gate keeps outside the run dir (changed, deleted or written by anything but
-        the gate)."""
+        """The gate state; ``{"tampered": True, ...}`` when gate_state.json does not verify
+        against the HMAC in the key store (changed, deleted, written by anything but the gate,
+        or no key for this run)."""
+        key = self.key
+        if key is None:
+            return self._bad("no gate key for this run dir (compose it on this host)")
+        with key.locked():
+            return self._state(key)
+
+    @staticmethod
+    def _bad(why: str) -> dict:
+        return {"executed": None, "history": [], "tampered": True, "why": why}
+
+    def _state(self, key: RunKey) -> dict:
+        bad = self._bad
         p = self.run_dir / STATE_FILE
-        dp = digest_path(self.run_dir)
-        try:
-            want = dp.read_text(encoding="utf-8").strip() if dp.is_file() else None
-        except OSError:
-            want = None
+        want = key.doc.get("state_mac")
         if not p.is_file():
             if want:
-                return {"executed": None, "history": [], "tampered": True,
-                        "why": "gate_state.json was deleted"}
+                return bad("gate_state.json was deleted")
             return {"executed": None, "history": []}
         try:
             raw = p.read_bytes()
         except OSError as exc:
-            return {"executed": None, "history": [], "tampered": True, "why": str(exc)}
-        if want != hashlib.sha256(raw).hexdigest():
-            return {"executed": None, "history": [], "tampered": True,
-                    "why": "gate_state.json was changed outside the gate"}
+            return bad(str(exc))
+        if not key.verify(STATE_MAC, raw, want):
+            return bad("gate_state.json was changed outside the gate")
         try:
             st = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            return {"executed": None, "history": [], "tampered": True, "why": str(exc)}
-        return st if isinstance(st, dict) else {"executed": None, "history": [],
-                                                "tampered": True, "why": "not an object"}
+            return bad(str(exc))
+        return st if isinstance(st, dict) else bad("not an object")
 
     def commit(self, d: Decision) -> None:
         if not (d.allow and d.record):
             return
-        st = self.state()
-        if st.get("tampered"):
+        key = self.key
+        if key is None:
             return
-        st["executed"] = d.record
-        st.setdefault("history", []).append(d.record)
-        p = self.run_dir / STATE_FILE
-        p.parent.mkdir(parents=True, exist_ok=True)
-        raw = (json.dumps(st, indent=2) + "\n").encode("utf-8")
-        dp = digest_path(self.run_dir)
-        dp.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(".tmp")
-        tmp.write_bytes(raw)
-        os.replace(tmp, p)
-        dtmp = dp.with_suffix(".tmp")
-        dtmp.write_text(hashlib.sha256(raw).hexdigest() + "\n", encoding="utf-8")
-        os.replace(dtmp, dp)
+        with key.locked():
+            st = self._state(key)
+            if st.get("tampered"):
+                return
+            st["executed"] = d.record
+            st.setdefault("history", []).append(d.record)
+            p = self.run_dir / STATE_FILE
+            p.parent.mkdir(parents=True, exist_ok=True)
+            raw = (json.dumps(st, indent=2) + "\n").encode("utf-8")
+            tmp = p.with_name(p.name + f".{os.getpid()}.tmp")
+            tmp.write_bytes(raw)
+            os.replace(tmp, p)
+            key.set(state_mac=key.mac(STATE_MAC, raw))
+
+    def pins(self) -> dict[str, str]:
+        """The compose manifest (``{path: sha256}``) if its MAC verifies, else ``{}`` (then no
+        file is trusted)."""
+        key = self.key
+        p = self.run_dir / COMPOSE_MANIFEST
+        if key is None or not p.is_file():
+            return {}
+        try:
+            raw = p.read_bytes()
+        except OSError:
+            return {}
+        if not key.verify(MANIFEST_MAC, raw, key.doc.get("manifest_mac")):
+            return {}
+        try:
+            files = json.loads(raw.decode("utf-8")).get("files")
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            return {}
+        return dict(files) if isinstance(files, dict) else {}
+
+    def foreign_files(self) -> list[str]:
+        """Files that appeared or changed outside ``plan/ cad/ out/ work/`` since compose (the
+        runtime's own files excepted). A compose manifest that does not verify is a problem."""
+        pins = self.pins()
+        if not pins:
+            return [f"{COMPOSE_MANIFEST} missing or not the one compose wrote"]
+        writable = tuple(self.policy.get("writable") or ())
+        out = []
+        now = tree_files(self.run_dir)
+        finished = (self.key.doc.get("finished_manifest_sha256") if self.key else None)
+        for rel, sha in now.items():
+            if rel.startswith(writable) or rel == COMPOSE_MANIFEST:
+                continue
+            if rel in RUNTIME_FILES and rel not in pins:
+                continue
+            if rel == MANIFEST_JSON and sha == finished:
+                continue  # as the last finish wrote it
+            if rel not in pins:
+                out.append(f"{rel} (new)")
+            elif pins[rel] != sha:
+                out.append(f"{rel} (changed)")
+        out += [f"{rel} (deleted)" for rel in pins
+                if rel not in now and not rel.startswith(writable)]
+        return out
 
     def log(self, tool: str, d: Decision) -> None:
         p = self.run_dir / LOG_FILE
@@ -455,7 +550,16 @@ class Gate:
     def _builtin(self, tool: str, args: dict) -> Decision:
         if tool not in (self.policy.get("builtin_allowed") or []):
             return Decision(False, f"tool {tool} is not available in benchmark runs", "denied")
+        for k in (self.policy.get("glob_args") or {}).get(tool) or []:
+            v = args.get(k)
+            if isinstance(v, str) and _GLOB_BAD.search(v):
+                return Decision(False, f"{tool}: {k} {v[:120]!r} must be a pattern relative to "
+                                "the run dir (no '..', '~', drive, UNC or absolute part)", "path")
         fkeys = (self.policy.get("file_tools") or {}).get(tool) or []
+        for k in fkeys:
+            v = args.get(k)
+            if isinstance(v, str) and ".." in PurePosixPath(v.replace("\\", "/")).parts:
+                return Decision(False, f"{tool}: {k} {v[:120]!r} climbs with '..'", "path")
         for k in fkeys:
             v = args.get(k)
             if isinstance(v, str) and v:
@@ -489,6 +593,9 @@ class Gate:
             why = self._scan_code(strip_comments_source(args[code_arg].encode("utf-8")))
             if why:
                 return Decision(False, f"denied: code {why}", "scan_code")
+            why = self._policy(args[code_arg], "<code>")
+            if why:
+                return Decision(False, f"denied: {why}", "code_policy")
         body = (self.bpol.get("body_as") or {}).get(tool)
         if body:
             why = self._script_body(args.get(body["path_arg"]), body)
@@ -498,7 +605,7 @@ class Gate:
         return self._cad(tool, f"{tool} {json.dumps(args, sort_keys=True)[:200]}",
                          source_call=bool(src), mutating=tool in self.mutating)
 
-    def _script_body(self, path: Any, body: dict) -> str | None:
+    def _script_body(self, path: Any, body: dict, profile: str | None = None) -> str | None:
         if not isinstance(path, str) or not path:
             return f"{body['path_arg']} missing"
         p = self._resolve(path)
@@ -507,19 +614,52 @@ class Gate:
         if not p.is_file():
             return f"{path} does not exist"
         files = [p] + self._importable()
+        pins = self.pins()
+        checked: list[tuple[Path, bytes]] = []
         for f in files:
             if f.suffix.lower() in OPAQUE_SUFFIXES:
                 return f"denied: {self._rel(f)}: compiled or packaged module"
             if f.suffix.lower() not in (".py", ".pyw") and f != p:
                 continue
-            text = strip_comments_source(f.read_bytes())
+            raw = f.read_bytes()
+            text = strip_comments_source(raw)
             hit = denied_match(self.denied_rules, body["as_tool"], {body["code_arg"]: text})
             if hit:
                 return f"denied: {self._rel(f)}: {hit.get('reason', 'denied_tools')}"
             why = self._scan_code(text)
             if why:
                 return f"denied: {self._rel(f)} {why}"
+            checked.append((f, raw))
+        for f, raw in checked:  # then the CAD code policy (scan access is reported first)
+            why = self._policy_file(f, raw, pins, profile)
+            if why:
+                return f"denied: {why}"
         return None
+
+    # CAD code policy ------------------------------------------------------------------------
+    def _policy(self, src: str, label: str, profile: str | None = None) -> str | None:
+        prof = profile or self.bpol.get("code_policy")
+        if not prof:
+            return None
+        cp = _code_policy()
+        return cp.check_source(src, prof, local_modules=cp.local_modules(self.run_dir),
+                               path=label)
+
+    def _policy_file(self, f: Path, raw: bytes, pins: dict[str, str],
+                     profile: str | None = None) -> str | None:
+        prof = profile or self.bpol.get("code_policy")
+        if not prof:
+            return None
+        cp = _code_policy()
+        rel = self._rel(f)
+        if rel.startswith("lib/") or rel.startswith(".claude/"):
+            if rel in pins and hashlib.sha256(raw).hexdigest() == pins[rel]:
+                return None  # skillset file exactly as compose copied it
+            if rel.startswith("lib/"):
+                return f"{rel}: lib/ is read-only and differs from what compose copied"
+        text = strip_comments_source(raw)  # decoded as Python reads it (PEP 263)
+        return cp.check_source(text, prof, local_modules=cp.local_modules(self.run_dir),
+                               path=rel)
 
     def _importable(self) -> list[Path]:
         out = []
@@ -610,14 +750,22 @@ class Gate:
                 return f"denied: {self._rel(p)}: compiled or packaged module"
             if p.suffix.lower() in (".py", ".pyw") and p.is_file() and p != journal:
                 files.append(p)
+        pins = self.pins()
+        checked: list[tuple[Path, bytes]] = []
         for f in files:
-            text = strip_comments_source(f.read_bytes())
+            raw = f.read_bytes()
+            text = strip_comments_source(raw)
             hit = denied_match(self.denied_rules, command, {"command": command, "journal": text})
             if hit:
                 return f"denied: {self._rel(f)}: {hit.get('reason', 'denied_tools')}"
             why = self._scan_code(text)
             if why:
                 return f"denied: {self._rel(f)} {why}"
+            checked.append((f, raw))
+        for f, raw in checked:  # then the CAD code policy (scan access is reported first)
+            why = self._policy_file(f, raw, pins)
+            if why:
+                return f"denied: {why}"
         return None
 
     # plan + revision -----------------------------------------------------------------------
@@ -678,6 +826,17 @@ class Gate:
             why = self._script_body(native, spec)
             if why:
                 problems.append(f"native file check: {why}")
+            elif self.bpol.get("native_policy"):
+                p = self.run_dir / native
+                why = self._policy(strip_comments_source(p.read_bytes()), native,
+                                   self.bpol["native_policy"])
+                if why:
+                    problems.append(f"native file check: {why}")
+        if self.kind != "none" or self.backend:
+            stray = self.foreign_files()
+            if stray:
+                problems.append("files appeared or changed outside plan/ cad/ out/ work/ "
+                                "during the session: " + ", ".join(stray[:8]))
         return {"ok": not problems, "problems": problems, "warnings": warnings}
 
 

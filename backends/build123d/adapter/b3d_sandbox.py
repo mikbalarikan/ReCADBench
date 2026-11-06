@@ -1,91 +1,71 @@
 """Restricted execution of an agent-written native script (``RECAD_SANDBOX=1``).
 
 ``recadbench finish`` runs ``recad build123d export|extract`` on agent code. With
-``RECAD_SANDBOX=1`` the adapter executes the script the way build123d-mcp's sandbox does (AST check,
-restricted builtins, import allow-list), and stricter, because the native-file contract of the
-build123d skillset (``cad/part.py``: build123d + math only, self-contained, no file access) allows
-less than an interactive session:
+``RECAD_SANDBOX=1`` the adapter
 
-* AST: no import outside the allow-list, no call of ``__import__`` / ``eval`` / ``exec`` /
-  ``compile`` / ``open`` / ``getattr`` / ``vars`` / ``globals`` / ``locals`` / ``breakpoint`` /
-  ``input``, no dunder attribute other than ``__name__`` / ``__doc__`` / ``__class__``;
-* builtins: the same names removed; ``__import__`` accepts only the allow-list roots (no
-  ``io``, ``os``, ``inspect``, no module from ``cad/`` or ``lib/``: the script is self-contained);
-* OCP: only the geometric sub-modules build123d-mcp allows (no STEP/IGES/STL readers, no OSD).
+* checks the script with the shared CAD code policy (``backends/recad_cli/code_policy.py``,
+  profile ``build123d_native``: an AST allow-list of node types, imports and names; no attribute
+  starting with ``_``; no file / import / export / process verbs; no string literal holding
+  ``__``; build123d + math-like stdlib only, nothing from ``cad/`` or ``lib/``);
+* executes it with a builtins dict that has no ``open`` / ``getattr`` / ``setattr`` / ``vars`` /
+  ``globals`` / ``eval`` / ``exec`` / ``compile`` / ``chr`` / ``bytes`` / ... and whose
+  ``__import__`` only imports what the policy allows;
+* from an empty temporary working directory (``sandbox_cwd``), so a relative path in the script
+  names nothing of the run.
 
-Not a complete sandbox (C extensions, build123d's own file-writing functions); finish adds OS-level
-measures (temporary copy, ``python -I``, no secrets in the environment). Stdlib only.
+Not a complete sandbox (C extensions, the CAD library's own APIs); finish adds OS-level measures
+(temporary copy, ``python -I``, no secrets in the environment) and the evaluator's GT-copy check.
+Stdlib only.
 """
 
 from __future__ import annotations
 
-import ast
 import builtins
+import contextlib
+import importlib.util
+import os
+import tempfile
+from pathlib import Path
 from typing import Any
 
-ALLOWED_ROOTS = frozenset({
-    "build123d", "bd_warehouse", "math", "cmath", "numpy", "decimal", "fractions", "statistics",
-    "numbers", "random", "collections", "itertools", "functools", "copy", "operator", "typing",
-    "abc", "dataclasses", "enum", "re", "string", "textwrap", "warnings", "OCP",
-})
-OCP_ALLOWED = frozenset({
-    "gp", "TopAbs", "TopExp", "TopLoc", "TopTools", "TopoDS", "BRep", "BRepTools", "BRepLib",
-    "BRepAdaptor", "BRepBndLib", "BRepCheck", "BRepClass", "BRepClass3d", "BRepExtrema",
-    "BRepGProp", "BRepIntCurveSurface", "BRepBuilderAPI", "BRepPrimAPI", "BRepFeat", "BRepFill",
-    "BRepFilletAPI", "BRepOffsetAPI", "BRepSweep", "BRepProj", "BRepAlgoAPI", "Geom", "Geom2d",
-    "GeomAbs", "GeomAPI", "GeomAdaptor", "GeomConvert", "GeomFill", "GeomLProp", "GeomProjLib",
-    "Adaptor2d", "Adaptor3d", "GProp", "GCPnts", "Bnd", "IntCurvesFace", "IntTools", "Extrema",
-    "ShapeAnalysis", "ShapeExtend", "ShapeFix", "ShapeUpgrade", "TColgp", "TColGeom", "TColStd",
-    "TCollection", "collections", "Approx", "Convert", "BSpl", "ProjLib",
-})
-BLOCKED_NAMES = frozenset({"__import__", "eval", "exec", "compile", "open", "breakpoint", "input",
-                           "getattr", "vars", "globals", "locals", "delattr", "setattr",
-                           "memoryview", "help", "exit", "quit"})
-ALLOWED_DUNDERS = frozenset({"__name__", "__doc__", "__class__"})
+PROFILE = "build123d_native"
+REMOVED_BUILTINS = frozenset({
+    "__import__", "eval", "exec", "compile", "open", "breakpoint", "input", "getattr",
+    "setattr", "delattr", "vars", "globals", "locals", "memoryview", "help", "exit", "quit",
+    "chr", "bytes", "bytearray", "__loader__", "__spec__", "copyright", "credits", "license",
+})  # __build_class__ stays (class statements); the AST policy denies naming it
 
 
 class SandboxError(ValueError):
     pass
 
 
+def _policy():
+    path = Path(__file__).resolve().parents[2] / "recad_cli" / "code_policy.py"
+    spec = importlib.util.spec_from_file_location("recadbench_code_policy", path)
+    if spec is None or spec.loader is None:
+        raise SandboxError(f"code policy missing at {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_POLICY = _policy()
+
+
 def module_allowed(name: str) -> bool:
-    parts = name.split(".")
-    if parts[0] not in ALLOWED_ROOTS:
-        return False
-    if parts[0] == "OCP" and len(parts) >= 2:
-        return parts[1] in OCP_ALLOWED
-    return True
+    return _POLICY.module_allowed(name, PROFILE)
 
 
 def check_source(src: str, path: str = "<native>") -> None:
     """Raise SandboxError when the script uses a construct the sandbox does not run."""
-    try:
-        tree = ast.parse(src, path)
-    except SyntaxError:
-        return  # compile() reports it with a better message
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for a in node.names:
-                if not module_allowed(a.name):
-                    raise SandboxError(f"import of {a.name!r} is not allowed in the native file")
-        elif isinstance(node, ast.ImportFrom):
-            if node.level:
-                raise SandboxError("relative imports are not allowed in the native file")
-            if not node.module or not module_allowed(node.module):
-                raise SandboxError(f"import from {node.module!r} is not allowed in the native "
-                                   "file")
-        elif isinstance(node, ast.Name) and node.id in BLOCKED_NAMES:
-            raise SandboxError(f"{node.id!r} is not allowed in the native file")
-        elif isinstance(node, ast.Attribute) and node.attr.startswith("__") and \
-                node.attr.endswith("__") and node.attr not in ALLOWED_DUNDERS:
-            raise SandboxError(f"dunder attribute {node.attr!r} is not allowed in the native "
-                               "file")
+    why = _POLICY.check_source(src, PROFILE, path=os.path.basename(path))
+    if why:
+        raise SandboxError(why)
 
 
 def restricted_builtins() -> dict[str, Any]:
-    safe = dict(vars(builtins))
-    for n in BLOCKED_NAMES:
-        safe.pop(n, None)
+    safe = {k: v for k, v in vars(builtins).items() if k not in REMOVED_BUILTINS}
     real = builtins.__import__
 
     def _import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
@@ -95,3 +75,15 @@ def restricted_builtins() -> dict[str, Any]:
 
     safe["__import__"] = _import
     return safe
+
+
+@contextlib.contextmanager
+def sandbox_cwd():
+    """Run with an empty temporary working directory (restored afterwards)."""
+    old = os.getcwd()
+    with tempfile.TemporaryDirectory(prefix="recad-sbx-") as td:
+        os.chdir(td)
+        try:
+            yield td
+        finally:
+            os.chdir(old)

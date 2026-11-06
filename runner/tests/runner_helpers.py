@@ -63,7 +63,19 @@ def mini_run(tmp_path: Path, backend: str = "build123d", retk=("mesh_stats",), s
         "part_id": part_id, "track": "T" if seeded else "E", "backend": backend,
         "retk_tools": list(retk), "seeded_revisions": list(seeded), "native_file": native}),
         encoding="utf-8")
+    seal(run)
     return run
+
+
+def seal(run: Path):
+    """What compose does last: a fresh gate key + the MAC'd manifest of the run dir's files
+    (call again after a test adds harness files such as lib/)."""
+    from recadbench_run.gate_hook import write_compose_manifest
+    from recadbench_run.gate_key import RunKey
+
+    key = RunKey.load(run) or RunKey.create(run)
+    write_compose_manifest(run, key)
+    return key
 
 
 # ------------------------------------------------------------------------- content repos
