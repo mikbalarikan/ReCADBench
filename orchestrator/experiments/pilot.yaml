@@ -1,0 +1,61 @@
+# First benchmark test (P11 pilot), written in H9 (PROMPTS_v2 H9, HANDOVER.md section 6 item 6).
+# Expand:  recadbench-orch expand orchestrator/experiments/pilot.yaml --count --data-dir <data>
+# Estimate: orchestrator/experiments/PILOT_ESTIMATE.md (54 runs; cost / wall time per host).
+#
+# Matrix: 3 R385 dev pilots x 2 models x 1 replicate, and
+#   Track T  oracle      x {build123d@v1, nx@v1, none@build123d, none@nx}   (24 runs)
+#   Track E  B, D        x {build123d@v1, nx@v1}                            (24 runs)
+#   Track S  B           plan only, no skillset / backend                   ( 6 runs)
+# none@<b> is the bare-L1 baseline (compose --skillset none --backend <b>), Track T only.
+#
+# Harness level H3 (not the 04_STRATEGIES default H1) - required, not a preference:
+#   harness_level is one value per experiment (expand.py), and compose gives retk the
+#   strategy's toolkit_tools INTERSECTED with the level (gate_policy.yaml harness_levels).
+#   B and D declare all 7 retk tools and their stages call slice / fit_primitives /
+#   detect_holes / snap_nominal (B analyze + map, D intake + datum); at H1 they would get only
+#   mesh_stats + self_deviation, the "legal but degenerate" ablation of 04_STRATEGIES.
+#   H3 changes nothing for Track T: oracle has toolkit_tools [] (no retk server at any level)
+#   and none@<b> runs oracle too. So H3 = every strategy runs with exactly what it declares.
+#   An H1 ablation of B / D is a later, separate experiment.
+#
+# Pins (00_DECISIONS D5; every run_manifest.json records the resolved shas):
+#   spec            spec-v0.3.0 = 1d62228 (ReCADBench; runner/evaluator installed from main
+#                   4f692f7, which carries recadbench-spec 0.3.0)
+#   strategies      6cc9798 (ReCADBench-strategies origin/main, H7 #4)            refs.strategy
+#   build123d@v1    tag build123d-v1 = 846414c (ReCADBench-cad-skills)            refs.skillset
+#   nx@v1           tag nx-v1 = a21f3fa (ReCADBench-cad-skills; has NO _shared/ir_execution.md
+#                   or _shared/single_solid_rules.md: compose records a warning, see
+#                   PILOT_ESTIMATE.md "nx-v1 and _shared")                        refs.skillset
+#   none@<b>        _shared/ir_execution.md from 846414c                          refs.skillset.none
+#   data            ReCADBench-data 6e72944 (task.yaml spec 0.3.0)   - not enforced by expand /
+#   gt              ReCADBench-gt   9f0142a (gt_plan spec 0.3.0)     - compose (see open items):
+#                   check `git rev-parse HEAD` on every host before enqueueing; run_manifest
+#                   records compose.data_sha.
+#
+# Budgets: task.yaml (max_wall_s 3600, max_turns 200) for every run, plus max_cost_usd as a
+# runaway guard only. It sits above the analytic per-run ceiling of the more expensive model at
+# the turn cap (PILOT_ESTIMATE.md: Opus 5.5 Track E cap ~ $40 incl. subagents), so it never binds
+# a run that stays inside the task budgets; it stops e.g. a subagent loop that max_turns (main
+# loop turns only) does not see.
+name: pilot
+parts: [r385_hs01_motor_mount, r385_dr02_wobble_plate, r385_hs04_pump_head]
+replicates: 1
+harness_level: H3
+budgets: {max_cost_usd: 60}
+refs:
+  strategy: 6cc9798aeec278a8e8875752e21bcc340d95e95e
+  skillset:
+    build123d@v1: build123d-v1
+    nx@v1: nx-v1
+    none: 846414c106a885b10e486bba2e72c6e457502121
+pins:  # informational (expand ignores this key); checked by hand before --enqueue
+  spec: spec-v0.3.0
+  data: 6e72944528f5ac5ecd20227343ac72f5341e2235
+  gt: 9f0142a2468cd53416fea8bf31b14ca488edba05
+models:
+  - {id: claude-opus-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
+  - {id: claude-sonnet-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
+tracks:
+  T: {strategies: [oracle], skillsets: [build123d@v1, nx@v1, none@build123d, none@nx]}
+  E: {strategies: [B, D], skillsets: [build123d@v1, nx@v1]}
+  S: {strategies: [B]}
