@@ -241,7 +241,8 @@ def icp(
     cut_prev: float | None = None
     for it in range(1, max_iter + 1):
         moved = apply(T, src_pts)
-        d, cp, nrm, _ = target.query(moved, beyond_mm=trim_cap_mm)
+        # exact up to 1 mm; farther correspondences only need an upper bound for trimming
+        d, cp, nrm, _ = target.query(moved, beyond_mm=min(trim_cap_mm, 1.0))
         if cut_prev is None:
             cut = min(trim_cap_mm, float(np.quantile(d, trim_quantile)))
         else:

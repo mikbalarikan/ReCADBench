@@ -99,12 +99,12 @@ def test_plan_score_penalises(gt_env):
     part = gtstore.load_part("syn_clean")
     ir = copy.deepcopy(part.plan)
     for p in ir["parameters"]:
-        if p["name"] == "bore_d":
-            p["value"] = 7.0
+        if p["name"] == "hole_d":
+            p["value"] = 5.0
     ir["features"].append({"id": "EXTRA", "type": "fillet",
                            "params": {"radius": 1.0, "edges": "PLATE:edges:convex"}})
     ps = plan_score(ir, part.plan, part.key_dims, 0.02)
-    assert ps["key_dims_missing"] == ["bore_d"]
+    assert ps["key_dims_missing"] == ["hole_d"]
     assert 60 < ps["plan_score"] < 100
     bad = {"spec_version": "0.3.0"}
     assert plan_score(bad, part.plan, part.key_dims, 0.02)["plan_score"] == 0.0

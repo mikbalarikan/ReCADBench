@@ -324,10 +324,15 @@ def build(kind: str, run_dir: str | Path, *, part_id: str, gt_shape, gt_plan: di
             if cur is not None and abs(target - cur) < 1e-6:
                 continue  # already standard (an earlier edit may have moved it: re-measured)
             try:
-                shape, got = set_dim(shape, d, target, cfg)
+                moved, got = set_dim(shape, d, target, cfg)
             except (ValueError, RuntimeError) as exc:
                 info["changed"].append({"dim": d["name"], "skipped": str(exc)})
                 continue
+            if got is None or abs(got - target) > 1e-3:
+                info["changed"].append({"dim": d["name"], "skipped": f"measured {got} after the"
+                                        f" edit, wanted {target}"})
+                continue
+            shape = moved
             rep[float(d["nominal"])] = target
             info["changed"].append({"dim": d["name"], "nominal": d["nominal"], "set": got})
         feats = features_from_plan(gt_plan, len(shape.faces()), rep)

@@ -4,9 +4,12 @@
    ``meta.yaml: registration.T_scan_to_gt`` (identity for synthetic parts).
 2. Fine rigid alignment: trimmed point-to-plane ICP of candidate samples onto the GT surface
    from that start (fixed seed).
-3. Fallback when the start is poor (two-way F1 below ``fallback_f1``): the 24 proper PCA axis
-   orientations (03_SCORING "inits = identity + 24 PCA"), coarse ICP then fine ICP each; the
-   best by F1, then RMSE, wins. A candidate modelled in its own design frame still aligns, and
+3. Fallback when the start is poor (two-way F1 below ``FALLBACK_F1``): the 24 proper PCA axis
+   orientations (03_SCORING "inits = identity + 24 PCA") are ranked by the median distance to
+   the GT samples; the best ``PCA_REFINE`` get coarse ICP then fine ICP; the best by F1, then
+   RMSE, wins (the registration start included). F1 here is measured at
+   ``max(1 mm, 3 x tight band)``, so a correctly placed candidate with dimension errors never
+   leaves the registration start, while a candidate modelled in its own frame still aligns.
    ``datum_offset`` reports how far the final transform is from the registration.
 
 Rigid only, no scale.
@@ -19,11 +22,14 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .brep import Tess, apply
 from .geom import Surface, icp, rotation_delta, sample
 
 FALLBACK_F1 = 0.8
+PCA_REFINE = 3
+FALLBACK_BAND_MM = 1.0  # F1 band of the fallback test: catches a wrong frame, not small errors
 
 
 @dataclass
@@ -82,6 +88,7 @@ def align(pred_tess_scan: Tess, T_scan_to_gt: np.ndarray, gt_surface: Surface,
     src = sample(pred_tess_scan, n, seed).points  # scanner frame
     pred_surface = Surface(pred_tess_scan)
     probe_gt = gt_pts[:: max(1, len(gt_pts) // 5000)]
+    f1_band = max(FALLBACK_BAND_MM, 3.0 * band)
 
     def run(T_init: np.ndarray, coarse: bool) -> tuple[np.ndarray, float, bool, float]:
         T = T_init
@@ -92,15 +99,22 @@ def align(pred_tess_scan: Tess, T_scan_to_gt: np.ndarray, gt_surface: Surface,
         res = icp(apply(T, src), gt_surface)
         T = res.T @ T
         moved = apply(T, src)
-        f1 = _f1(moved[::4], gt_surface, apply(np.linalg.inv(T), probe_gt), pred_surface, band)
+        f1 = _f1(moved[::4], gt_surface, apply(np.linalg.inv(T), probe_gt), pred_surface,
+                 f1_band)
         return T, res.rmse_mm, res.converged, f1
 
     T, rmse, conv, f1 = run(T0, coarse=False)
     init = "registration"
     if f1 < FALLBACK_F1:
         src_gt = apply(T0, src)
-        for k, Tp in enumerate(_pca_inits(src_gt, gt_pts)):
-            Tk, rk, ck, fk = run(Tp @ T0, coarse=True)
+        tree = cKDTree(gt_pts)
+        probe = src_gt[:: max(1, len(src_gt) // 2000)]
+        inits = _pca_inits(src_gt, gt_pts)
+        # rank the 24 orientations cheaply (median nearest-sample distance, as scanreg does),
+        # then refine only the best PCA_REFINE with coarse + fine ICP
+        med = [float(np.median(tree.query(apply(Tp, probe))[0])) for Tp in inits]
+        for k in sorted(range(len(inits)), key=lambda i: (med[i], i))[:PCA_REFINE]:
+            Tk, rk, ck, fk = run(inits[k] @ T0, coarse=True)
             if (fk, -rk) > (f1, -rmse):
                 T, rmse, conv, f1, init = Tk, rk, ck, fk, f"pca:{k}"
     T_fine = T @ np.linalg.inv(T0)
