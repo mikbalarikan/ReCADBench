@@ -467,3 +467,13 @@ def test_in_place_build123d_edits_stay_mapped(tmp_path):
         """)
     assert doc["unmapped"] == [] and doc["count"] == 3, doc
 
+
+
+def test_written_files_use_lf(replays, tmp_path):
+    # review PR #8: features.json / native outputs were written with CRLF on Windows
+    _, out = replays["C01_block"]
+    assert b"\r\n" not in (out / "features.json").read_bytes()
+    ir = CASES_DIR / "C01_block" / "re_plan.v1.json"
+    run("execute-ir", str(ir), "--out", str(tmp_path / "o.step"),
+        "--native-out", str(tmp_path / "part.py"))
+    assert b"\r\n" not in (tmp_path / "part.py").read_bytes()

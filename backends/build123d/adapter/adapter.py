@@ -270,7 +270,7 @@ def cmd_set_param(a) -> dict:
     new_src = rewrite_param(src, a.name, float(a.value))
     target = a.native_out
     if target:
-        with open(target, "w", encoding="utf-8") as fh:
+        with open(target, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(new_src)
         after, _, _ = run_script(target)
     else:
@@ -317,7 +317,7 @@ def cmd_execute_ir(a) -> dict:
     if not native:
         tmpdir = tempfile.mkdtemp(prefix="recad_b3d_ir_")
         native = os.path.join(tmpdir, "part.py")
-    with open(native, "w", encoding="utf-8") as fh:
+    with open(native, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(script)
     try:
         part, _, _ = run_script(native)
@@ -337,7 +337,7 @@ def cmd_execute_ir(a) -> dict:
 
 def _write_json(path: str, doc: dict) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(doc, fh, indent=2)
         fh.write("\n")
 

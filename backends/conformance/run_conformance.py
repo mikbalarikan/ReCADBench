@@ -215,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
               "skipped": skipped, "cases": [c["case"] for c in cases], "rows": rows,
               "cross_backend": xb}
     if a.out:
-        Path(a.out).write_text(json.dumps(report, indent=2) + "\n")
+        Path(a.out).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8",
+                               newline="\n")
     return 0 if ok else 1
 
 
