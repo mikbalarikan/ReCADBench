@@ -221,24 +221,30 @@ def build(rows: list[dict]) -> dict:
         features.append(feat)
 
     # Fold booleans that only merge a single feature (taxonomy note). NX lists the target body's
-    # feature first in Feature.GetParents() and the tool feature(s) after it (measured).
+    # feature first in Feature.GetParents() and the tool feature(s) after it (measured). Both
+    # operands are measured the same way: the counted features in the parent closure of that
+    # operand. A body that merely exists earlier in the tree (not an ancestor of the target) is
+    # not part of the operand. Booleans are folded in tree order and a folded boolean no longer
+    # counts as a feature of later operands (same as the build123d tracer).
     counted_ts = {f["_ts"] for f in features if f["counted"]}
-    for f in features:
+    for f in sorted(features, key=lambda g: g["_ts"]):
         if f["taxonomy_type"] != "boolean":
             continue
         row = next(r for r in rows if r["ts"] == f["_ts"])
         kind = BOOLEAN_KIND.get(row["type"], "union")
         ps = parents.get(row["ts"], [])
         target, tools = ps[:1], ps[1:]
-        tool_set = _closure(tools, parents) - _closure(target, parents)
+        body_set = _closure(target, parents)
+        tool_set = _closure(tools, parents) - body_set
         n_tool = len(tool_set & counted_ts)
-        n_body = len({t for t in counted_ts if t < row["ts"]} - tool_set)
+        n_body = len(body_set & counted_ts)
         f.setdefault("params", {}).update(kind=kind, n_body=n_body, n_tool=n_tool)
         if not tools:
             unmapped.append(f"{f['native_name']} (BooleanFeature): no tool feature found")
         elif not boolean_counts(kind, n_body, n_tool):
             f["counted"] = False
             f["params"]["merged_into"] = "single-feature operand: part of that feature"
+            counted_ts.discard(f["_ts"])
     for f in features:
         f.pop("_ts", None)
     out = {

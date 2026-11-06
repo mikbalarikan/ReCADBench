@@ -149,3 +149,39 @@ def test_every_mapped_type_is_in_the_spec_taxonomy():
     )
     assert mapped <= known, mapped - known
     assert T.COUNTED == set(tax.counting_rule.counted)
+
+
+def test_union_body_operand_is_the_target_closure_not_all_earlier_features():
+    # Reviewer case (build123d twin gives 4): A = 1 block; B = block + extrude united into B;
+    # X = unrelated cylinder; UNITE(A, B); UNITE(., X). A and X are single-feature operands, so
+    # both unites are part of their operand. Earlier code counted every feature before the
+    # boolean as the body side (n_body 2 for UNITE(6)) and gave 5.
+    rows = [
+        row(1, "Block", "BLOCK"),
+        row(2, "Block", "BLOCK"),
+        row(3, "SketchFeature", "SKETCH"),
+        row(4, "Extrude", "EXTRUDE", parents=[2, 3]),
+        row(5, "Cylinder", "CYLINDER"),
+        row(6, "BooleanFeature", "UNITE", parents=[1, 4]),
+        row(7, "BooleanFeature", "UNITE", parents=[6, 5]),
+    ]
+    doc = T.build(rows)
+    assert doc["count"] == 4
+    u6, u7 = (f for f in doc["features"] if f["taxonomy_type"] == "boolean")
+    assert (u6["params"]["n_body"], u6["params"]["n_tool"]) == (1, 2) and not u6["counted"]
+    assert (u7["params"]["n_body"], u7["params"]["n_tool"]) == (3, 1) and not u7["counted"]
+
+
+def test_union_of_two_multi_feature_bodies_after_unrelated_body_counts():
+    # unrelated body first must not change the decision either way
+    rows = [
+        row(1, "Cylinder", "CYLINDER"),
+        row(2, "Extrude", "EXTRUDE"),
+        row(3, "EdgeBlend", "BLEND", parents=[2]),
+        row(4, "Extrude", "EXTRUDE"),
+        row(5, "Chamfer", "CHAMFER", parents=[4]),
+        row(6, "BooleanFeature", "UNITE", parents=[3, 5]),
+    ]
+    doc = T.build(rows)
+    b = next(f for f in doc["features"] if f["taxonomy_type"] == "boolean")
+    assert b["counted"] and (b["params"]["n_body"], b["params"]["n_tool"]) == (2, 2)
