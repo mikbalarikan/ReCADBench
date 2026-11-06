@@ -42,7 +42,8 @@ def load_init(arg: str, scan, gt, seed: int) -> tuple[np.ndarray, str]:
     if arg == "identity":
         return np.eye(4), "identity"
     if arg == "pca":
-        return scanreg.coarse_pca(scan, gt, seed=seed), "PCA axes (24 proper flips)"
+        T = scanreg.coarse_icp(scan, gt, scanreg.coarse_pca(scan, gt, seed=seed), seed=seed)
+        return T, "PCA axes (24 proper flips) + coarse ICP (20/8/3 mm caps)"
     data = json.loads(Path(arg).read_text(encoding="utf-8"))
     T = data.get("T_scan_to_gt", data.get("T", data)) if isinstance(data, dict) else data
     T = np.asarray(T, dtype=float)
@@ -79,6 +80,7 @@ def run(args: argparse.Namespace) -> dict:
         seed=args.seed,
         n_scan=args.samples,
         n_gt=args.samples,
+        extraneous_mm=args.extraneous,
     )
     ang, mm = scanreg.rotation_delta(np.linalg.inv(T0) @ reg.T)
     return {
@@ -112,7 +114,9 @@ def run(args: argparse.Namespace) -> dict:
             "threshold_mm": fl.threshold_mm,
             "mask_file": "observability_mask.npz",
         },
+        "extraneous": {"fraction": round(fl.extraneous_fraction, 5), "beyond_mm": fl.extraneous_mm},
         "detail": {
+            "scan_to_gt_all": fl.scan_to_gt_all,
             "scan_to_gt": fl.scan_to_gt,
             "gt_to_scan_all": fl.gt_to_scan_all,
             "gt_to_scan_observable": fl.gt_to_scan_observable,
@@ -168,6 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--chord", type=float, default=0.01, help="STEP tessellation chord, mm")
     p.add_argument(
         "--threshold", type=float, default=DEFAULT_THRESHOLD_MM, help="observability distance, mm"
+    )
+    p.add_argument(
+        "--extraneous",
+        type=float,
+        default=1.5,
+        help="scan farther than this from GT (table, fixtures) is excluded from the floor, mm",
     )
     p.add_argument("--seed", type=int, default=11)
     p.add_argument("--icp-samples", type=int, default=20000)
