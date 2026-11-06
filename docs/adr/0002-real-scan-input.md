@@ -18,7 +18,7 @@ Available data (2026-11-05):
 | Set | Parts | Scan | GT | Provenance |
 |---|---|---|---|---|
 | R385 diaphragm pump (owner's desktop) | 8 shortlisted | owner's own scans, private | owner's NX rebuild (`.prt` with feature tree + `.stp`), **human** | replica of a commercial part; public RS-385 CAD exists |
-| `mikbalarikan/open-dedica` (public, CC BY 4.0) | 14 (≈11 usable; PCBs out) | public raw STLs (Creality CR-Scan Raptor) | build123d STEPs made **by agents** with the stl-re skills; most verdicts `BAND_NOT_MET`, accepted by owner | public scan + public CAD; commercial (De'Longhi) parts |
+| `mikbalarikan/open-dedica` (public, CC BY 4.0) | 14 (≈11 usable; PCBs out) | public raw STLs (Creality CR-Scan Raptor) | build123d STEPs made **by agents** with the stl-re skills; most verdicts `BAND_NOT_MET`, accepted by owner | public scan + public CAD; commercial-product parts |
 | `agentic_STL-to-CAD/golden-examples` (private) | 5 | mixed | successful RE projects | not yet cleared (some may be client work) |
 | OGUZ own designs (inventory, 32) | — | **none yet**; owner can print + scan | original NX design | own design, private |
 
@@ -108,7 +108,7 @@ tasks.
 | GE-01 (golden example, client part) | original full-res on Drive (repo has a cleaned mesh) | build123d + NX, verdict APPROVED | `agent_human_reviewed` | `commercial_replica` | |
 | GE-02 (golden example, client part) | full-res on Drive (repo: decimated) | build123d + NX, APPROVED | `agent_human_reviewed` | `commercial_replica` | |
 | GE-03, GE-04 (golden examples, client parts) | full-res on Drive (repo: decimated) | build123d + NX, gates PASS | `agent_human_reviewed` | `commercial_replica` | 2 parts |
-| OD-H12 Dedica/ULKA pump | same scan as open-dedica OD-H01 (**public**) | build123d + NX, band not met (p95 0.448) | `agent_human_reviewed` | `public_scan`, `commercial_replica` | calibration-grade only |
+| OD-H12 pump (calibration) | same scan as open-dedica OD-H01 (**public**) | build123d + NX, band not met (p95 0.448) | `agent_human_reviewed` | `public_scan`, `commercial_replica` | calibration-grade only |
 | M02-02-03 compound gear | `M02-02-03.STL` (179k faces, not watertight) | build123d `model.py` | `agent_human_reviewed` | to confirm | provenance of the mesh to confirm |
 | GE-05 (golden example stub) | — | — | — | — | stub, excluded |
 
