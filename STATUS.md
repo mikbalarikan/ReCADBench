@@ -7,7 +7,7 @@ Update at the end of every session.
 |---|---|---|
 | P1 | Scaffold all five repos, contracts copied to spec/, CI (ruff + pytest + check_public), token docs, Termux spike | done |
 | P2 | recadbench-spec: models, taxonomy, validate CLI, tag spec-v0.1.0 | done — merged (#2); spec 0.2.0 via ADR 0002. Tags: create `spec-v0.2.0` after this PR merges (`spec-v0.1.0` optional, superseded) |
-| P3 | Backends build123d / solidcraft / freecad + conformance suite | done (uncommitted, awaiting review/PR): 3 adapters, `recad` dispatcher, conformance 10/10 on all three, counts identical; FreeCAD MCP = freecad-robust-mcp 0.6.1 (ADR 0003) |
+| P3 | Backends build123d / solidcraft / freecad + conformance suite | done (#8); H1: conformance 10/10 on all three on windows too, MCP tool-list snapshots + CI check (PR h1-desktop-backends) |
 | P4 | NX backend (runner, adapter, replays) | todo |
 | P6 | register_gt.py + make_task.py (real scans, ADR 0002), AUTHORING.md, 3 R385 pilots | tooling done (synthetic-tested); pilots pending desktop data |
 | P7 | Evaluator + golden tests | todo |
@@ -16,6 +16,7 @@ Update at the end of every session.
 | P12 | Skillset improvement loop (reads results/) | recurring |
 
 ## Log
+- 2026-11-06 — H1 (P3 on the desktop, Windows 11 x64): conformance 30/30 through `recad` on windows (build123d 0.13.0 venv, FreeCAD 26.3 = the pinned conda-forge `freecad=2026.09.16` win-64 build, solidcraft-cli 0.30.1 release portable zip with sha256 matching SHA256SUMS.txt), volumes/counts identical to the Linux run; also FreeCAD 1.1.1 bundle 10/10 (not the pin). FreeCAD pin kept at 26.3: no official 26.3 final exists (rc1/rc2 only), conda-forge reproduces the exact build a4ce44d33 on both OSes. Adapter suites on windows: 142 + freecad 43 + solidcraft 40 pass. New `backends/conformance/mcp_tools.py` + `backends/<b>/mcp_tools.json` snapshots (build123d-mcp 48 tools, freecad-robust-mcp 0.6.1 83 tools, solidcraft 21 tools) with a CI check against `cad_prefixes.mutating` and a host-only live refresh test; found freecad `recompute_document` missing from `mutating` (added). Windows fixes: freecad tests find FreeCAD.pyd in conda `Library\bin`/bundle `bin` (skipped before), explicit UTF-8 reads in backend tests/runner, `.gitattributes` keeps snapshots LF under autocrlf, conda `freecadcmd.exe` needs the env DLL dirs on PATH (documented, handled by mcp_tools.py).
 - 2026-11-06 — PR #8 adversarial review on the ASUS (Windows 11, build123d 0.13.0, FreeCAD 1.1.1): build123d extract fooled 4 ways (kernel handle swapped via setattr/`__dict__`, `insert()` of an untraced solid, `bounding_box(mode=ADD)`) -> now fingerprints shape handles + BuildPart parts and reports `unmapped`; freecad extract counted features of a shapeless scratch body (count 3 for a 1-pad part) -> counts the result body (+ Boolean tool bodies) only; adapters/run_conformance wrote CRLF -> LF; `recad --help` crashed on a cp437 console -> ASCII; last two brand names in ADR 0002 removed. Conformance on this host: build123d 10/10, freecad 10/10 (FreeCAD 1.1.1, not the pinned 26.3); solidcraft not installed. build123d-mcp 0.3.91 `tools/list` matches backend.yaml `mutating`.
 - 2026-11-06 — Handover to a desktop main session: `docs/handover/` (HANDOVER.md state/decisions/rules/definition of done, PROMPTS_v2.md H0–H9, MAIN_SESSION_BRIEF.md); private companion `ReCADBench-gt/HANDOVER_PRIVATE.md`. Client names in current docs replaced by neutral ids GE-01…GE-05 (mapping private); they remain in git history (rewrite = owner decision).
 - 2026-11-06 — P3: L1 backends build123d (0.13.0 + build123d-mcp 0.3.91, reference, `execute-ir`), freecad (FreeCAD 26.3 + freecad-robust-mcp 0.6.1, ADR 0003), solidcraft (solidcraft-cli 0.30.1): `backend.yaml`, install.md, adapters (export / extract / set-param / replay), 10 replays each, review fixes (dumb-solid fillet/mirror → unmapped, dead ops not counted, Boolean tool bodies, C09/C10 solidcraft replays, usage errors → one JSON). `recad` dispatcher (`backends/recad_cli`, package recadbench-backends 0.1.0): subprocess per call with the backend interpreter, features.json validation, needs_measure STEP measuring, `recad backends`. `backends/conformance/run_conformance.py`: 30/30 case×backend pass, cross-backend counts identical (CONFORMANCE.md). CI now installs ./backends + build123d 0.13.0 and runs backends/tests (28) + backends/build123d/tests (64); full suite 223 passed. FreeCAD (41) and SolidCraft (40) adapter tests pass locally, not in CI.
@@ -30,6 +31,13 @@ Update at the end of every session.
 - 2026-11-05 — P1: scaffold created per 02_REPO_LAYOUTS.md. No logic.
 
 ## Open questions
+
+### From H1 (P3 on the desktop)
+- **FreeCAD pin is a conda-forge dev build** (2026.09.16, reports 26.3.0) because FreeCAD 26.3 final is not released (26.3rc2 on 2026-10-18). Re-pin to the official 26.3 release once it exists, and rerun conformance + `mcp_tools.py refresh`.
+- **freecad-robust-mcp 0.6.1 needs a running bridge even for `tools/list`** (it connects during initialize and exits otherwise). The runner must start the bridge before the agent's MCP client; the snapshot refresh starts a private one.
+- **freecad-robust-mcp 0.6.1 has no tool annotations**: the 31 non-mutating tools are listed by hand in `backends/freecad/mcp_tools.json` `not_mutating`. Any new tool after a pin bump fails the check until classified. Its serverInfo reports `freecad-mcp 1.30.0` (the mcp library version), not 0.6.1.
+- **Stale SolidCraft 0.19.0** is installed in Program Files on the evaluator host and is not on PATH; workers must set `RECAD_SOLIDCRAFT_CLI` to the 0.30.1 binary explicitly.
+- **git autocrlf=true** on the Windows host: working-tree files are CRLF. Only the MCP snapshots are forced to LF (`.gitattributes`); a repo-wide `* text=auto eol=lf` would make Windows checkouts byte-equal to Linux ones (owner decision, touches every file).
 
 ### From P3 (backends)
 - **CAD MCPs expose RE analysis** (P10): build123d-mcp 0.3.91 has read-only `mesh_section`,
