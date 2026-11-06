@@ -1,0 +1,60 @@
+# L1 pin: Siemens NX backend (05_TOOLS.md, 00_DECISIONS D1). NX is used unmodified.
+# Agent path: the agent writes NX Open Python journals into cad/ and runs ONLY
+#   recadbench nx-run cad/<journal>.py
+# (backends/nx/runner/nx_run.py over run_journal.exe; journals model in cad/part.prt; each run
+# writes cad/last_run.json). No MCP: DreamEnding/NX_MCP is not used in v1.
+id: nx
+software:
+  name: Siemens NX
+  version: '2206'
+  source: Siemens NX 2206 (commercial licence, FlexNet SPLM_LICENSE_SERVER); batch runner
+    NXBIN/run_journal.exe, embedded Python 3.10.9
+  journal_python: 3.10.9 (NX 2206 embedded)
+  template: model-plain-1-mm-template.prt
+interface:
+  kind: cli
+  allowed_commands:
+  - recadbench nx-run cad/*.py
+  runner:
+    command: recadbench nx-run
+    default_timeout_s: 120
+    part: cad/part.prt
+    result: cad/last_run.json
+    logs: cad/logs/<journal>.log
+    lib_on_sys_path: lib/  # the skillset's lib/ in the run dir (compose copies it there)
+hosts:
+- windows
+adapter_cli:
+  export: recad nx export
+  extract: recad nx extract
+  set_param: recad nx set-param
+  replay: recad nx replay
+# ADR 0004: journal code that imports or analyses the scan inside NX is denied (RE analysis goes
+# through retk, identical for every backend). kind cli: `tool` = prefix of the command; the
+# arguments the matcher sees are {"command": <command line>, "journal": <source text of the
+# journal with its # comments removed, decoded as Python decodes it: nx_run.journal_source>}
+# (json.dumps: a line break is the two characters backslash, n). Words in comments therefore do
+# not refuse a run; words in strings and docstrings do (a docstring is reachable via __doc__).
+# `recadbench nx-run` enforces this list itself before NX starts, on the journal and on every
+# other .py in the run dir and in lib/ (all importable by the journal), refuses compiled /
+# zipped modules there and purges __pycache__, and refuses the run (exit 1, last_run.json error
+# "denied: ...").
+# The regex is BEST-EFFORT on free-form code: it matches NXOpen.Facet / faceted bodies, convergent
+# bodies, Fit Surface, STL/OBJ/PLY/3MF import builders and importers, mesh libraries, a load call
+# or File property on a mesh-file literal and any reference to the workspace input/ folder. Code
+# that builds names or paths at runtime is not caught; extract still reports facet / convergent /
+# imported bodies as unmapped (residual risk: STATUS open questions, P10).
+denied_tools:
+- tool: recadbench nx-run
+  args_regex: 'NXOpen\.Facet\b|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*Facet\b|Faceted(?:Bod(?:y|ies)|Face)|Convergent|FitSurface|(?i:(?:stl|ply|obj|3mf)_?import|import_?(?:stl|ply|obj|3mf)\b)|(?:(?<!\w)|(?<=\\[nt]))(?:import|from)\s+(?:trimesh|open3d|pymeshlab|meshio|pyvista|vtk|stl)\b|(?:(?<!\w)|(?<=\\[nt]))(?i:(?:open|read|load|import)\w*\s*\(\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf)\b)|(?i:\.File(?:Name)?\s*=\s*\\?[\"''][^\"'']*\.(?:stl|ply|obj|3mf)\b)|(?<![\w.])input(?:/|\\\\)|(?i:(?<![\w.])input\.(?:stl|ply|obj|3mf)\b)'
+  reason: NX Open journal that imports or analyses a mesh (the scan) - facet / convergent
+    bodies, Fit Surface, STL/OBJ/PLY/3MF import - or reads the input/ folder
+# One NX licence per host => one NX process at a time (00_DECISIONS D9). nx_run.py also holds a
+# host-wide lock file, so concurrent callers queue instead of failing.
+max_parallel: 1
+# Results: backends/conformance/CONFORMANCE.md (run_conformance.py through recad, ASUS host).
+conformance:
+  passed: 10
+  total: 10
+  date: '2026-11-06'
+  software_version: NX 2206 (run_journal.exe 2023-05-31), Windows 11; adapter Python 3.13
