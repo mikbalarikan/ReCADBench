@@ -14,7 +14,6 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
-import os
 import sys
 import textwrap
 from pathlib import Path
@@ -91,6 +90,87 @@ def test_check_flags_tool_both_mutating_and_excluded():
                for p in mcp_tools.check("solidcraft", snap))
 
 
+def test_check_flags_tool_outside_cad_prefixes_all(monkeypatch):
+    real = mcp_tools.load_backend
+
+    def wrong_all(backend):
+        manifest = copy.deepcopy(real(backend))
+        manifest["interface"]["cad_prefixes"]["all"] = ["mcp__solid__"]
+        return manifest
+
+    monkeypatch.setattr(mcp_tools, "load_backend", wrong_all)
+    problems = mcp_tools.check("solidcraft", _synthetic())
+    assert problems and all("not under cad_prefixes.all" in p for p in problems)
+    assert len(problems) == len(_synthetic()["tools"])
+
+
+def test_check_flags_mutating_tool_annotated_read_only():
+    snap = _synthetic()
+    for t in snap["tools"]:
+        if t["name"] == "execute":
+            t["read_only_hint"] = True
+    problems = mcp_tools.check("solidcraft", snap)
+    assert problems == ["mcp__solidcraft__execute: in cad_prefixes.mutating but the server "
+                        "annotates readOnlyHint=true (fix the entry, or re-check the pin's "
+                        "annotation)"]
+
+
+def test_check_flags_read_only_tool_added_to_mutating(monkeypatch):
+    snap = _synthetic()
+    ro = next(t["name"] for t in snap["tools"] if t["read_only_hint"] is True)
+    real = mcp_tools.load_backend
+
+    def with_ro(backend):
+        manifest = copy.deepcopy(real(backend))
+        manifest["interface"]["cad_prefixes"]["mutating"].append(f"mcp__solidcraft__{ro}")
+        return manifest
+
+    monkeypatch.setattr(mcp_tools, "load_backend", with_ro)
+    problems = mcp_tools.check("solidcraft", snap)
+    assert len(problems) == 1 and f"mcp__solidcraft__{ro}" in problems[0]
+    assert "readOnlyHint=true" in problems[0]
+
+
+@pytest.mark.parametrize("backend", mcp_tools.MCP_BACKENDS)
+def test_invalid_env_override_is_an_error_not_absent(backend, monkeypatch, tmp_path):
+    monkeypatch.setenv(mcp_tools.ENV_VAR[backend], str(tmp_path / "does not exist" / "x.exe"))
+    with pytest.raises(mcp_tools.MisconfiguredError, match=mcp_tools.ENV_VAR[backend]):
+        mcp_tools.server_command(backend)
+    with pytest.raises(mcp_tools.MisconfiguredError):
+        _available(backend)
+
+
+def test_unset_env_and_not_on_path_is_absent(monkeypatch):
+    monkeypatch.delenv("RECAD_SOLIDCRAFT_CLI", raising=False)
+    monkeypatch.setattr(mcp_tools.shutil, "which", lambda *_a, **_k: None)
+    assert mcp_tools.server_command("solidcraft") is None
+
+
+def test_valid_env_override_is_used(monkeypatch, tmp_path):
+    exe = tmp_path / "solidcraft-cli.exe"
+    exe.write_bytes(b"")
+    monkeypatch.setenv("RECAD_SOLIDCRAFT_CLI", str(exe))
+    assert mcp_tools.server_command("solidcraft")[0] == str(exe)
+
+
+def test_freecad_bridge_env_half_set_or_missing_is_an_error(monkeypatch, tmp_path):
+    real = tmp_path / "freecadcmd.exe"
+    real.write_bytes(b"")
+    monkeypatch.delenv("RECAD_FREECAD_CMD", raising=False)
+    monkeypatch.delenv("RECAD_FREECAD_BRIDGE", raising=False)
+    assert mcp_tools.freecad_bridge_configured() is False
+    monkeypatch.setenv("RECAD_FREECAD_CMD", str(real))
+    with pytest.raises(mcp_tools.MisconfiguredError, match="both"):
+        mcp_tools.freecad_bridge_configured()
+    monkeypatch.setenv("RECAD_FREECAD_BRIDGE", str(tmp_path / "missing.py"))
+    with pytest.raises(mcp_tools.MisconfiguredError, match="RECAD_FREECAD_BRIDGE"):
+        mcp_tools.freecad_bridge_configured()
+    bridge = tmp_path / "blocking_bridge.py"
+    bridge.write_text("", encoding="utf-8")
+    monkeypatch.setenv("RECAD_FREECAD_BRIDGE", str(bridge))
+    assert mcp_tools.freecad_bridge_configured() is True
+
+
 def test_prefix_entries_match_by_prefix():
     assert mcp_tools.matches("mcp__freecad__create_box", "mcp__freecad__create_")
     assert not mcp_tools.matches("mcp__freecad__recompute_document", "mcp__freecad__recompute")
@@ -135,17 +215,23 @@ def test_list_tools_against_fake_server(tmp_path):
 
 
 def _available(backend: str) -> bool:
+    """False only when nothing is configured; a set but invalid env var raises
+    MisconfiguredError (the drift check must not silently skip on a misconfigured host)."""
     if mcp_tools.server_command(backend) is None:
         return False
     if backend == "freecad":  # 0.6.1 exits without a bridge; refresh starts a private one
-        return bool(os.environ.get("RECAD_FREECAD_CMD") and os.environ.get("RECAD_FREECAD_BRIDGE"))
+        return mcp_tools.freecad_bridge_configured()
     return True
 
 
 @pytest.mark.parametrize("backend", mcp_tools.MCP_BACKENDS)
 def test_live_tools_match_snapshot(backend, tmp_path):
     """Host-only: the installed server's live tools/list equals the checked-in snapshot."""
-    if not _available(backend):
+    try:
+        available = _available(backend)
+    except mcp_tools.MisconfiguredError as exc:
+        pytest.fail(f"{backend}: misconfigured host, not skipping: {exc}")
+    if not available:
         pytest.skip(f"{backend} MCP server not installed on this host")
     out = tmp_path / f"{backend}.json"
     out.write_bytes(mcp_tools.snapshot_path(backend).read_bytes())  # keeps hand-maintained maps

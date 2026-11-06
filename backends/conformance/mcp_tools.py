@@ -17,7 +17,9 @@ wording, not with the gate surface).
 2. every snapshot tool covered by `mutating` exists;
 3. every tool whose `readOnlyHint` is not true is either covered by `mutating` or listed in the
    snapshot's hand-maintained `not_mutating` map with a reason (writes files only, ...);
-4. every tool name starts with one of `cad_prefixes.all` once the server prefix is applied.
+4. every tool name starts with one of `cad_prefixes.all` once the server prefix is applied;
+5. no tool covered by `mutating` is annotated `readOnlyHint: true` by the server (a read-only
+   tool put in `mutating` by mistake, or a pin bump that changed a tool's annotation).
 
 A `mutating` entry for a tool the server only serves with non-default flags (build123d-mcp
 `load_part` needs `--library`) is listed in the snapshot's hand-maintained `conditional` map
@@ -69,13 +71,41 @@ def snapshot_path(backend: str) -> Path:
     return BACKENDS_DIR / backend / "mcp_tools.json"
 
 
+class MisconfiguredError(FileNotFoundError):
+    """An override env var is set but does not name an existing file (not the same as absent)."""
+
+
+def _env_path(var: str) -> str | None:
+    """Value of `var` if set; raises MisconfiguredError when it is set to a missing file."""
+    val = os.environ.get(var)
+    if not val:
+        return None
+    if not (os.path.isfile(val) or shutil.which(val)):
+        raise MisconfiguredError(f"{var} is set to {val!r}, which is not an existing file")
+    return val
+
+
 def server_command(backend: str) -> list[str] | None:
-    """argv of the MCP server, or None if it is not installed on this host."""
+    """argv of the MCP server, or None if it is not installed on this host.
+
+    None only when the override env var is unset and the command is not on PATH; a set but
+    invalid override raises MisconfiguredError, so a misconfigured host is not taken for one
+    without the tool.
+    """
     mcp = load_backend(backend)["interface"]["mcp"]
-    exe = os.environ.get(ENV_VAR[backend]) or shutil.which(mcp["command"])
-    if not exe or not (os.path.isfile(exe) or shutil.which(exe)):
+    exe = _env_path(ENV_VAR[backend]) or shutil.which(mcp["command"])
+    if not exe:
         return None
     return [exe, *mcp.get("args", [])]
+
+
+def freecad_bridge_configured() -> bool:
+    """True if RECAD_FREECAD_CMD and RECAD_FREECAD_BRIDGE both name existing files, False if
+    both are unset; MisconfiguredError if one is missing or names a nonexistent file."""
+    cmd, bridge = _env_path("RECAD_FREECAD_CMD"), _env_path("RECAD_FREECAD_BRIDGE")
+    if bool(cmd) != bool(bridge):
+        raise MisconfiguredError("set both RECAD_FREECAD_CMD and RECAD_FREECAD_BRIDGE, or neither")
+    return bool(cmd)
 
 
 def server_env(backend: str) -> dict[str, str]:
@@ -187,6 +217,9 @@ def check(backend: str, snap: dict[str, Any]) -> list[str]:
         covered = any(matches(n, e) for e in mutating)
         if covered and n in not_mut:
             problems.append(f"{n}: in mutating and in not_mutating")
+        if covered and hints[n] is True:
+            problems.append(f"{n}: in cad_prefixes.mutating but the server annotates "
+                            "readOnlyHint=true (fix the entry, or re-check the pin's annotation)")
         if not covered and hints[n] is not True and n not in not_mut:
             problems.append(f"{n}: readOnlyHint={hints[n]!r} but not in cad_prefixes.mutating "
                             "(add it, or list it under not_mutating with a reason)")
@@ -205,10 +238,10 @@ def _free_port() -> int:
 @contextlib.contextmanager
 def freecad_bridge(env: dict[str, str]):
     """Start a private headless RobustMCPBridge if RECAD_FREECAD_CMD/_BRIDGE are set."""
-    cmd, bridge = os.environ.get("RECAD_FREECAD_CMD"), os.environ.get("RECAD_FREECAD_BRIDGE")
-    if not (cmd and bridge):
+    if not freecad_bridge_configured():
         yield env
         return
+    cmd, bridge = os.environ["RECAD_FREECAD_CMD"], os.environ["RECAD_FREECAD_BRIDGE"]
     env = dict(env, FREECAD_XMLRPC_PORT=str(_free_port()), FREECAD_SOCKET_PORT=str(_free_port()))
     # A conda-forge freecadcmd.exe on Windows needs the env's DLL dirs on PATH (what `conda
     # activate` adds); without them it dies with 0xC0000135 (DLL not found).
