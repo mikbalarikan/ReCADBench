@@ -180,6 +180,19 @@ def _versions() -> dict:
     return {"spec": SPEC_VERSION, "evaluator": __version__}
 
 
+def _load_reason(exc: Exception, manifest: dict | None) -> str:
+    """Why output.step did not load. When finish refused to export (its re-import / one-solid
+    check failed), that refusal is the cause; "file not found" alone would hide it."""
+    msg = str(exc)
+    fin = (manifest or {}).get("finish") or {}
+    exp = fin.get("export") if isinstance(fin, dict) else None
+    if isinstance(exp, dict) and exp.get("ok") is False and exp.get("error"):
+        return f"finish export failed: {exp['error']} ({msg})"
+    if isinstance(fin, dict) and fin.get("error"):
+        return f"finish failed: {fin['error']} ({msg})"
+    return msg
+
+
 def _zero(res: dict, g: GateResult, details: dict) -> dict:
     res["gate"] = {"ok": False, "reason": g.reason or "gate failed"}
     if g.faces_pred is not None:
@@ -235,7 +248,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     try:
         pred = brep.load_step(step)
     except ValueError as exc:
-        g.fail("loads", str(exc))
+        g.fail("loads", _load_reason(exc, manifest))
         return _rnd(_zero(res, g, details))
     g.passed("loads")
     sols = brep.solids(pred)
