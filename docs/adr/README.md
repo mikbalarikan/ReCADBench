@@ -10,3 +10,4 @@
 - [0002](0002-real-scan-input.md) — Inputs are real scans in the scanner frame; v1 dev-only (spec 0.2.0)
 - [0003](0003-freecad-mcp-selection.md) — FreeCAD MCP selection: freecad-robust-mcp 0.6.1 (P3)
 - [0004](0004-spec-030-known-gaps.md) — Spec 0.3.0: sketch `{"ref"}`, typed taxonomy params, `pattern_circular` angle_deg/pitch_deg, features.json keys, backend.yaml `denied_tools`, 0.2.0 migration (H3)
+- [0005](0005-p11-pass-rule-calibration.md) — P11 calibration: k_floor 1.0, PASS rule (all key dims, b1 match, presence probes, max-deviation veto, r >= 0.7); **proposed** (P11)
