@@ -96,6 +96,9 @@ _READBACK = (
 )
 
 
+READBACK_REL_TOL = 1e-3  # relative volume, NX vs the independent STEP read-back
+
+
 def _readback(step: Path) -> dict[str, Any] | None:
     """Independent STEP read-back (solids, volume, faces) with build123d, in a child process:
     OCCT prints reader messages straight to fd 1 (also at exit), which must stay off our stdout.
@@ -137,7 +140,10 @@ def _step_result(res: dict[str, Any], step: Path) -> dict[str, Any]:
         return out
     out["readback"] = rb
     v = out["volume_mm3"]
-    if rb["solids"] != 1 or abs(rb["volume_mm3"] - v) > 1e-5 * max(1.0, abs(v)):
+    # NX (Parasolid) and the read-back (OCCT) integrate curved faces differently: P11 saw 3e-5 ..
+    # 1e-4 relative on a spherical dome, so 1e-5 rejected valid parts. Same cross-kernel
+    # tolerance as the Solidcraft adapter; a wrong or broken export is off by far more.
+    if rb["solids"] != 1 or abs(rb["volume_mm3"] - v) > READBACK_REL_TOL * max(1.0, abs(v)):
         out.update(ok=False, error=f"STEP read-back mismatch: {rb} vs NX volume {v}")
     return out
 
