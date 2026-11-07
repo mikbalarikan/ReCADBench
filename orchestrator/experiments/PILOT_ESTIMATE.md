@@ -1,5 +1,15 @@
 # Pilot estimate (H9): run count, cost, wall time
 
+> **P11 amendment (2026-11-07, owner decision on section 6):** tag `nx-v1` stays as it is and
+> `nx-v2` (ReCADBench-cad-skills #4: same `nx/` plus the `_shared/` files) is added. Track T runs
+> **both** nx@v1 and nx@v2 (nx@v2 - nx@v1 = effect of the `_shared/` guides; nx@v2 - none@nx is
+> the clean skillset delta), Track E uses nx@v2. **60 runs** (T 30 / E 24 / S 6; nx 30; 30 per
+> model). `pilot_estimate.py` (nx@v2 C0 assumed 47k): **low $72 / expected $319 / cap $1,618**
+> (Opus 48 / 212 / 1,079, Sonnet 24 / 106 / 539); ASUS N=3 wall time **2.6 / 9.9 / 30.6 h**
+> (NX lane 30 runs serial). The tables below are the H9 54-run numbers; the per-run figures are
+> unchanged and nx@v2 rows are within 1 % of nx@v1. Agents run on the owner's logged-in Claude
+> account (no API key on the host), so `$` is the CLI's list-price figure, not an invoice.
+
 Experiment: [`pilot.yaml`](pilot.yaml). Numbers regenerate with
 `python orchestrator/experiments/pilot_estimate.py orchestrator/experiments/pilot.yaml` (the
 profile constants at the top of that script are the assumptions listed below). This is a

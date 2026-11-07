@@ -30,7 +30,8 @@ PRICES = {
 }
 
 # initial cached context C0 (tokens): build123d@v1 measured in the H8 smoke (37.9k); others assumed
-C0 = {"build123d@v1": 38_000, "nx@v1": 45_000, "none@build123d": 30_000, "none@nx": 30_000,
+C0 = {"build123d@v1": 38_000, "nx@v1": 45_000, "nx@v2": 47_000,
+      "none@build123d": 30_000, "none@nx": 30_000,
       "none@none": 33_000}
 
 # per run class: turns T, context growth g / turn, output o / turn, subagent factor m,
