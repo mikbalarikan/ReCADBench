@@ -7,7 +7,8 @@
 # solidcraft-cli). Windows: release asset solidcraft-0.30.1-windows-x64-portable.zip (sha256
 # 14392c9d96f21a6bcd606d565bd676703be46c01fccf8956da2e8a89ab1f1d21, matches the release
 # SHA256SUMS.txt; solidcraft-cli.exe sha256 abc39aed92a18ea540bf12ea17552cd974f63313208a0ad1d4468062ae3a6a88).
-# Termux ARM64: unverified, see install.md "Termux test" (not listed in hosts).
+# Termux ARM64: verified 2026-11-07 (install.md section E steps 1-6), route = native Termux build
+# (cargo, rustc 1.99.1, Bionic; no glibc-runner / proot), so no extra max_parallel limit on the phone.
 id: solidcraft
 software:
   name: solidcraft-cli
@@ -38,6 +39,7 @@ hosts:
 - linux
 - windows
 - macos
+- termux
 adapter_cli:
   export: recad solidcraft export
   extract: recad solidcraft extract

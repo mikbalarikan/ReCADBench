@@ -96,10 +96,12 @@ python3 backends/solidcraft/adapter/adapter.py replay C01_block --out-dir /tmp/s
 pytest backends/solidcraft/tests          # 32 tests; uses build123d for an exact STEP volume if present
 ```
 
-## E. Termux (Android ARM64): test steps (unverified)
+## E. Termux (Android ARM64): test steps
 
-`termux` is **not** in `backend.yaml` `hosts` until these steps pass on the phone. Nobody has run
-them yet. Run them in Termux (F-Droid build, aarch64) and record the outcome in `STATUS.md`.
+**Verified 2026-11-07** (Xiaomi 23021RAAEG, Android 14, Termux 0.118.3 F-Droid, rustc 1.99.1):
+steps 1-6 pass with the **native** route (step 3 fallback not needed); `termux` is now in
+`backend.yaml` `hosts`. Native release build about 68 min of compile time with `-j 2`, ~2 GB
+`target/`. Full log: recadbench-strategies `toolkit/PHONE_REPORT.md` (branch `phone-h2-report`).
 
 1. Toolchain:
    ```bash
