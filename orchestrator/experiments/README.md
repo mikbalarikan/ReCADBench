@@ -1,7 +1,7 @@
 # orchestrator/experiments
 
 Experiment definitions `*.yaml`, expanded by `recadbench-orch expand` (P10). The first test
-(P11 pilot, written in H9): [`pilot.yaml`](pilot.yaml) - 54 runs; cost / wall-time estimate,
+(P11 pilot, written in H9): [`pilot.yaml`](pilot.yaml) - 60 runs (54 in H9; nx@v2 added in P11); cost / wall-time estimate,
 assumptions and the zero-cost pipeline check in [`PILOT_ESTIMATE.md`](PILOT_ESTIMATE.md)
 (numbers regenerate with `python pilot_estimate.py pilot.yaml`; run count pinned by
 `orchestrator/tests/test_pilot.py`).

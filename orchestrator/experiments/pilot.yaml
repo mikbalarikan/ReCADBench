@@ -3,8 +3,8 @@
 # Estimate: orchestrator/experiments/PILOT_ESTIMATE.md (54 runs; cost / wall time per host).
 #
 # Matrix: 3 R385 dev pilots x 2 models x 1 replicate, and
-#   Track T  oracle      x {build123d@v1, nx@v1, none@build123d, none@nx}   (24 runs)
-#   Track E  B, D        x {build123d@v1, nx@v1}                            (24 runs)
+#   Track T  oracle      x {build123d@v1, nx@v1, nx@v2, none@build123d, none@nx} (30 runs)
+#   Track E  B, D        x {build123d@v1, nx@v2}                            (24 runs)
 #   Track S  B           plan only, no skillset / backend                   ( 6 runs)
 # none@<b> is the bare-L1 baseline (compose --skillset none --backend <b>), Track T only.
 #
@@ -23,6 +23,9 @@
 #                   4f692f7, which carries recadbench-spec 0.3.0)
 #   strategies      6cc9798 (ReCADBench-strategies origin/main, H7 #4)            refs.strategy
 #   build123d@v1    tag build123d-v1 = 846414c (ReCADBench-cad-skills)            refs.skillset
+#   nx@v2           tag nx-v2 (ReCADBench-cad-skills #4: same nx/ as nx-v1 plus the _shared/
+#                   files its skillset.yaml lists; P11 owner decision: keep nx-v1, add nx-v2,
+#                   Track T runs both = effect of _shared/, Track E uses nx@v2) refs.skillset
 #   nx@v1           tag nx-v1 = a21f3fa (ReCADBench-cad-skills; has NO _shared/ir_execution.md
 #                   or _shared/single_solid_rules.md: compose records a warning, see
 #                   PILOT_ESTIMATE.md "nx-v1 and _shared")                        refs.skillset
@@ -47,6 +50,7 @@ refs:
   skillset:
     build123d@v1: build123d-v1
     nx@v1: nx-v1
+    nx@v2: nx-v2
     none: 846414c106a885b10e486bba2e72c6e457502121
 pins:  # informational (expand ignores this key); checked by hand before --enqueue
   spec: spec-v0.3.0
@@ -56,6 +60,6 @@ models:
   - {id: claude-opus-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
   - {id: claude-sonnet-5-5, provider: anthropic, agent_backend: claude_agent_sdk}
 tracks:
-  T: {strategies: [oracle], skillsets: [build123d@v1, nx@v1, none@build123d, none@nx]}
-  E: {strategies: [B, D], skillsets: [build123d@v1, nx@v1]}
+  T: {strategies: [oracle], skillsets: [build123d@v1, nx@v1, nx@v2, none@build123d, none@nx]}
+  E: {strategies: [B, D], skillsets: [build123d@v1, nx@v2]}
   S: {strategies: [B]}
