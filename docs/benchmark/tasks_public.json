@@ -1,0 +1,72 @@
+[
+  {
+    "id": "r385_hs01_motor_mount",
+    "no": 1,
+    "title": "Motor mount cup",
+    "family": "R385 diaphragm pump",
+    "difficulty": "medium"
+  },
+  {
+    "id": "r385_dr02_wobble_plate",
+    "no": 2,
+    "title": "Wobble plate",
+    "family": "R385 diaphragm pump",
+    "difficulty": "hard"
+  },
+  {
+    "id": "r385_hs04_pump_head",
+    "no": 3,
+    "title": "Pump head",
+    "family": "R385 diaphragm pump",
+    "difficulty": "very hard"
+  },
+  {
+    "id": "r385_hs02_diaphragm_frame",
+    "no": 4,
+    "title": "Diaphragm frame",
+    "family": "R385 diaphragm pump",
+    "difficulty": "hard"
+  },
+  {
+    "id": "r385_dr01_eccentric_hub",
+    "no": 5,
+    "title": "Eccentric hub",
+    "family": "R385 diaphragm pump",
+    "difficulty": "medium"
+  },
+  {
+    "id": "od_g04_brewing_gasket_support",
+    "no": 6,
+    "title": "Brewing gasket support",
+    "family": "Open Dedica espresso machine",
+    "difficulty": "medium"
+  },
+  {
+    "id": "od_s03_steam_knob",
+    "no": 7,
+    "title": "Steam knob",
+    "family": "Open Dedica espresso machine",
+    "difficulty": "medium"
+  },
+  {
+    "id": "od_h22_three_way_valve",
+    "no": 8,
+    "title": "3-way valve",
+    "family": "Open Dedica espresso machine",
+    "difficulty": "hard"
+  },
+  {
+    "id": "od_h24_flowmeter",
+    "no": 9,
+    "title": "Flowmeter",
+    "family": "Open Dedica espresso machine",
+    "difficulty": "very hard"
+  },
+  {
+    "id": "od_h11_thermoblock",
+    "no": 10,
+    "title": "Thermoblock",
+    "family": "Open Dedica espresso machine",
+    "difficulty": "very hard"
+  }
+]

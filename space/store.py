@@ -176,6 +176,17 @@ def clean_row(row: dict) -> dict:
     return out
 
 
+def waiting_rows(rows: Iterable[dict]) -> list[dict]:
+    """Rows waiting for a scorer, first in first out: ``pending`` and not dispatched yet (no
+    ``job_id``). Order: ``queued_at`` (ISO UTC strings sort in time order), then insertion."""
+    indexed = [
+        (str(r.get("queued_at") or r.get("submitted_at") or ""), i, r)
+        for i, r in enumerate(rows)
+        if r.get("status") == "pending" and not r.get("job_id")
+    ]
+    return [r for _, _, r in sorted(indexed, key=lambda t: (t[0], t[1]))]
+
+
 def _check_id(submission_id: str) -> str:
     if not isinstance(submission_id, str) or not SUBMISSION_ID_RE.match(submission_id):
         raise ValueError("invalid submission id")
@@ -261,6 +272,10 @@ class Store(ABC):
         """A local path to another file of the public report (renders), or None."""
         return None
 
+    def local_zip(self, sha: str) -> Path | None:
+        """A local file holding the stored zip (downloaded if needed), or None."""
+        return None
+
     def get_result(self, submission_id: str) -> dict | None:
         for r in self.list_results():
             if r.get("submission_id") == submission_id:
@@ -298,6 +313,10 @@ class LocalStore(Store):
 
     def zip_ref(self, sha: str) -> str:
         return str(self.root / "submissions" / f"{_check_sha(sha)}.zip")
+
+    def local_zip(self, sha: str) -> Path | None:
+        p = Path(self.zip_ref(sha))
+        return p if p.is_file() else None
 
     # rows
     def _read(self) -> list[dict]:
@@ -434,6 +453,9 @@ class HubStore(Store):
 
     def zip_ref(self, sha: str) -> str:
         return f"submissions/{_check_sha(sha)}.zip"
+
+    def local_zip(self, sha: str) -> Path | None:
+        return self._download(self.zip_ref(sha))
 
     # rows
     def _read(self) -> list[dict]:

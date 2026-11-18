@@ -1,8 +1,10 @@
-# ReCADBench Open Space (Gradio UI only; scoring runs in the eval image, see Dockerfile.eval).
-# The Space also needs recadbench_eval/__init__.py + recadbench_eval/submission.py copied next to
-# app.py at deploy time (stdlib only, see README.md "Deploy").
+# ReCADBench Open Space image (sdk: docker, docker/Dockerfile): installed in ONE pip resolve with
+# ./spec ./evaluator (the in-Space scorer). deploy_hf.py stages this file with every package below
+# pinned to the version installed where stage runs (gradio: --gradio-version, default installed).
 gradio[oauth]>=6.0,<7
 huggingface_hub>=1.0
 filelock>=3.12
 fastapi
 uvicorn
+# optional in the evaluator: heatmap renders of the public report
+matplotlib
