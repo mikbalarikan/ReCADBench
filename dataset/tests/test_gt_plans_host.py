@@ -1,5 +1,7 @@
 """Host-only: every GT plan under RECADBENCH_GT_DIR validates against the current spec and its
-circular patterns (count, step, seed angle) match the cylinders in its gt.step (ADR 0004).
+circular patterns (count, step, seed angle) match the cylinders / cones / torus sectors in its
+gt.step (ADR 0004). Patterns whose seeds have no locatable circular edge are not failures but
+are reported as a warning (unobservable).
 
 Skips cleanly without RECADBENCH_GT_DIR (CI, workers) or without build123d. Reads GT in place;
 nothing is copied or printed beyond pass/fail details.
@@ -8,6 +10,7 @@ nothing is copied or printed beyond pass/fail details.
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 
 import pytest
@@ -41,6 +44,15 @@ def test_gt_circular_patterns_match_gt_step(part: Path) -> None:
     bad = [
         (c.feature, [(x.seed, x.source, x.status, x.expected, x.found) for x in c.candidates])
         for c in checks
-        if not c.ok
+        if c.failed
     ]
     assert not bad, bad
+    unobservable = [
+        f"{c.feature} ({', '.join(c.unobservable_seeds)})"
+        for c in checks
+        if c.status == "unobservable"
+    ]
+    if unobservable:  # not verified, not failed: listed so it is never a silent OK
+        warnings.warn(
+            f"{part.name}: unobservable patterns: {'; '.join(unobservable)}", stacklevel=1
+        )
