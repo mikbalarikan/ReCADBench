@@ -26,7 +26,7 @@ Announced live on 2026-11-18; the submission Space opens in the coming days. Des
 | 2 | `r385_dr02_wobble_plate` | wobble plate | R385 diaphragm pump | hard |
 | 3 | `r385_hs04_pump_head` | pump head | R385 diaphragm pump | very hard |
 | 4 | `r385_hs02_diaphragm_frame` | diaphragm frame | R385 diaphragm pump | hard |
-| 5 | `r385_hs03_valve_plate` | valve plate | R385 diaphragm pump | very hard |
+| 5 | `r385_dr01_eccentric_hub` | eccentric hub | R385 diaphragm pump | medium |
 | 6 | `od_g04_brewing_gasket_support` | brewing gasket support | Open Dedica espresso machine | medium |
 | 7 | `od_s03_steam_knob` | steam knob | Open Dedica espresso machine | medium |
 | 8 | `od_h22_three_way_valve` | 3-way valve | Open Dedica espresso machine | hard |
