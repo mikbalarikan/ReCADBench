@@ -173,6 +173,11 @@ HEAD = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&display=swap">'
+    # The page text is English: keep <html lang="en"> so CSS text-transform: uppercase does not
+    # apply the visitor's locale rules (a Turkish browser would print "TİER", "SUBMİSSİONS").
+    "<script>(function(){var h=document.documentElement;function f(){if(h.lang!=='en')"
+    "h.setAttribute('lang','en');}f();new MutationObserver(f).observe(h,"
+    "{attributes:true,attributeFilter:['lang']});})();</script>"
 )
 
 CSS = r"""

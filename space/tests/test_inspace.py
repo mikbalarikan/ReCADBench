@@ -892,7 +892,10 @@ def test_poller_retries_gt_and_then_scores_waiting_rows(tmp_path):
     _queue, poller = space_app.start_scoring(store, disp, cfg, every_s=0.02)
     try:
         deadline = time.time() + 5
-        while not popen.calls and time.time() < deadline:
+        # the row turns "scoring" just after the child starts: wait for both, not only the call
+        while time.time() < deadline and not (
+            popen.calls and store.get_result(sid_of(1))["status"] == "scoring"
+        ):
             time.sleep(0.02)
         assert disp.configured and popen.sid_of(0) == sid_of(1)
         assert store.get_result(sid_of(1))["status"] == "scoring"
