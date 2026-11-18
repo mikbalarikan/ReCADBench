@@ -59,7 +59,7 @@ The images are renders of the raw scans: exactly what the agent gets, with every
     <td align="center" width="20%"><img src="docs/assets/tasks/r385_dr02_wobble_plate.webp" width="150" alt="wobble plate scan"><br><b>02 · Wobble plate</b><br><sub><code>r385_dr02_wobble_plate</code></sub><br><sub>🟠 hard</sub></td>
     <td align="center" width="20%"><img src="docs/assets/tasks/r385_hs04_pump_head.webp" width="150" alt="pump head scan"><br><b>03 · Pump head</b><br><sub><code>r385_hs04_pump_head</code></sub><br><sub>🔴 very hard</sub></td>
     <td align="center" width="20%"><img src="docs/assets/tasks/r385_hs02_diaphragm_frame.webp" width="150" alt="diaphragm frame scan"><br><b>04 · Diaphragm frame</b><br><sub><code>r385_hs02_diaphragm_frame</code></sub><br><sub>🟠 hard</sub></td>
-    <td align="center" width="20%"><img src="docs/assets/tasks/r385_hs03_valve_plate.webp" width="150" alt="valve plate scan"><br><b>05 · Valve plate</b><br><sub><code>r385_hs03_valve_plate</code></sub><br><sub>🔴 very hard</sub></td>
+    <td align="center" width="20%"><img src="docs/assets/tasks/r385_dr01_eccentric_hub.webp" width="150" alt="eccentric hub scan"><br><b>05 · Eccentric hub</b><br><sub><code>r385_dr01_eccentric_hub</code></sub><br><sub>🟢 medium</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/assets/tasks/od_g04_brewing_gasket_support.webp" width="150" alt="brewing gasket support scan"><br><b>06 · Brewing gasket support</b><br><sub><code>od_g04_brewing_gasket_support</code></sub><br><sub>🟢 medium</sub></td>
