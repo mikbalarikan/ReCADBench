@@ -7,15 +7,18 @@
 </p>
 
 <p align="center">
+  <a href="https://youtube.com/live/S4zE6OxCbLg"><img src="https://img.shields.io/badge/live-18.11%20%C2%B7%2021%3A00%20TRT-FF0000?style=flat-square&logo=youtube&logoColor=white&labelColor=0D161F" alt="Watch the live race on YouTube: 18.11.2026, 21:00 TRT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ECF1F5?style=flat-square&labelColor=0D161F" alt="MIT license"></a>
   <a href="spec/"><img src="https://img.shields.io/badge/spec-0.3.0-00E5FF?style=flat-square&labelColor=0D161F" alt="spec 0.3.0"></a>
   <a href="spec/pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?style=flat-square&logo=python&logoColor=white&labelColor=0D161F" alt="Python 3.11+"></a>
-  <a href="#the-10-tasks"><img src="https://img.shields.io/badge/tasks-10%20real%20scans-FF9A4D?style=flat-square&labelColor=0D161F" alt="10 real scans"></a>
+  <a href="#the-10-tasks"><img src="https://img.shields.io/badge/tasks-10%20scans-FF9A4D?style=flat-square&labelColor=0D161F" alt="10 real scans"></a>
   <a href="#scoring"><img src="https://img.shields.io/badge/score-%2F95%20%2B%20PASS-9DFF2E?style=flat-square&labelColor=0D161F" alt="score /95 + PASS"></a>
-  <a href="#recadbench-open-coming-soon"><img src="https://img.shields.io/badge/Open%20track-coming%20soon-FF3347?style=flat-square&labelColor=0D161F" alt="ReCADBench Open: coming soon"></a>
+  <a href="#recadbench-open-coming-soon"><img src="https://img.shields.io/badge/Open-coming%20soon-FF3347?style=flat-square&labelColor=0D161F" alt="ReCADBench Open: coming soon"></a>
 </p>
 
 <p align="center">
   <b>Scan → parametric CAD reverse-engineering benchmark for AI agents.</b><br>
+  <a href="https://youtube.com/live/S4zE6OxCbLg"><b>Live race on YouTube</b></a> ·
   <a href="#what-we-measure">What we measure</a> ·
   <a href="#the-10-tasks">The 10 tasks</a> ·
   <a href="#scoring">Scoring</a> ·
@@ -101,37 +104,6 @@ Announced live on 2026-11-18; the submission Space opens in the coming days. Des
 
 **How to take part**
 
-1. Download the 10 scans (`input.stl` + `task.yaml` per task) from the public inputs dataset (link follows).
-2. Let your agent, with any CAD backend (build123d, NX, FreeCAD, SolidWorks, Onshape, ...), rebuild each scan as one
-   parametric solid in the scanner frame.
-3. Zip `meta.json` + one folder per task with `output.step` (optionally the native model, plan and run stats) and
-   upload it in the Space. Format: [docs/benchmark/submission.md](docs/benchmark/submission.md) (draft).
-4. Every upload gets an automatic **Open** score (/95, STEP-only). Submissions with a native model can be
-   **Verified** by an admin, which adds the official feature-tree score (S2) and PASS.
-
-Ground truth is never published. These 10 tasks are a public dev set; a hidden test set follows later.
-
-## ReCADBench Open: coming soon
-
-Run **your own agent** on 10 real scans and upload the result: an online leaderboard in the style of Hugging Face's
-CADGenBench (a Space with Submit / Leaderboard / Tasks, a public inputs dataset, private ground truth).
-Announced live on 2026-11-18; the submission Space opens in the coming days. Design: [ADR 0006](docs/adr/0006-open-track.md)
-(proposed).
-
-| # | Task id | Part | Set | Difficulty |
-|---|---|---|---|---|
-| 1 | `r385_hs01_motor_mount` | motor mount cup | R385 diaphragm pump | medium |
-| 2 | `r385_dr02_wobble_plate` | wobble plate | R385 diaphragm pump | hard |
-| 3 | `r385_hs04_pump_head` | pump head | R385 diaphragm pump | very hard |
-| 4 | `r385_hs02_diaphragm_frame` | diaphragm frame | R385 diaphragm pump | hard |
-| 5 | `r385_dr01_eccentric_hub` | eccentric hub | R385 diaphragm pump | medium |
-| 6 | `od_g04_brewing_gasket_support` | brewing gasket support | Open Dedica espresso machine | medium |
-| 7 | `od_s03_steam_knob` | steam knob | Open Dedica espresso machine | medium |
-| 8 | `od_h22_three_way_valve` | 3-way valve | Open Dedica espresso machine | hard |
-| 9 | `od_h24_flowmeter` | flowmeter | Open Dedica espresso machine | very hard |
-| 10 | `od_h11_thermoblock` | thermoblock | Open Dedica espresso machine | very hard |
-
-How to take part:
 1. Download the 10 scans (`input.stl` + `task.yaml` per task) from the public inputs dataset (link follows).
 2. Let your agent, with any CAD backend (build123d, NX, FreeCAD, SolidWorks, Onshape, ...), rebuild each scan as one
    parametric solid in the scanner frame.
