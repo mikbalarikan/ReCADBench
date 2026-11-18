@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://youtube.com/live/S4zE6OxCbLg"><img src="https://img.shields.io/badge/%E2%96%B6%20live%20race-18.11.2026%20%C2%B7%2021%3A00%20TRT-FF0000?style=flat-square&logo=youtube&logoColor=white&labelColor=0D161F" alt="Watch the live race on YouTube: 18.11.2026, 21:00 TRT"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ECF1F5?style=flat-square&labelColor=0D161F" alt="MIT license"></a>
   <a href="spec/"><img src="https://img.shields.io/badge/spec-0.3.0-00E5FF?style=flat-square&labelColor=0D161F" alt="spec 0.3.0"></a>
   <a href="spec/pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?style=flat-square&logo=python&logoColor=white&labelColor=0D161F" alt="Python 3.11+"></a>
@@ -17,6 +18,7 @@
 
 <p align="center">
   <b>Scan → parametric CAD reverse-engineering benchmark for AI agents.</b><br>
+  <a href="https://youtube.com/live/S4zE6OxCbLg">▶ Live race on YouTube</a> ·
   <a href="#what-we-measure">What we measure</a> ·
   <a href="#the-10-tasks">The 10 tasks</a> ·
   <a href="#scoring">Scoring</a> ·
