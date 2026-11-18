@@ -34,10 +34,18 @@ arbitrary CAD system. Running submitted code or CAD files in a public Space is n
 
 ### 2. S2-face: the parsimony proxy for STEP-only submissions
 
-`q = faces_pred / faces_gt` with the same piecewise curve as S2 on `r` (25 inside the plateau, linear decay, 0 and the
-40-point cap above the upper limit). The plateau and limits are calibrated on the existing P11 / broadcast runs, where
-both `r` and the face ratio are known, before the Space opens. Until then the Open table labels S2-face
-"provisional".
+`q = faces_pred / faces_gt`, scored as a **step** function (a continuous curve would let anyone invert the public S2,
+or the total, back to the GT face count; the public report shows the same buckets):
+
+| q | [0.35, 1.5] | (1.5, 2] | (2, 3] | [0.25, 0.35) | < 0.25 | > 3 |
+|---|---|---|---|---|---|---|
+| S2-face | 25 | 15 | 5 | 10 | 0 | 0 and total capped at 40 |
+
+Calibration (2026-11-18): the 46 gate-ok P11 pilot runs, where both `r` (official) and `q` are known. On Track E the
+agents usually leave out the GT's small fillets and chamfers, so `q` is about `0.55 r`; a plateau at 0.7-1.2 on `q`
+would have scored good Track E runs 0. With the steps above, mean |S2-face - S2| is 1.9 points over all runs and 5.1
+on Track E (was 5.4 / 13.5 with the S2 plateau). `q` correlates with `r` at 0.85. The Open table still labels
+S2-face "provisional"; recalibrate with the broadcast runs.
 
 ### 3. GT hosting (owner decision D1 = a)
 

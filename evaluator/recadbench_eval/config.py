@@ -19,6 +19,9 @@ CLASS_BANDS: dict[str, tuple[float, float, float, float]] = {
     "B": (0.10, 0.95, 0.30, 0.99),
     "C": (0.30, 0.95, 0.50, 0.99),
 }
+# score layers (ADR 0006): "official" = 03_SCORING as is; "open" = STEP-only submissions
+# (geometry-only G0, S2-face, no S5, never PASS)
+LAYERS: tuple[str, ...] = ("official", "open")
 # 03_SCORING §3 S3: key-dim tolerance by class (mm)
 CLASS_KEYDIM_TOL: dict[str, float] = {"A": 0.01, "B": 0.02, "C": 0.05}
 

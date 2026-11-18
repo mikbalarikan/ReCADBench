@@ -12,10 +12,17 @@ Pipeline: gate (static) -> align (T_scan_to_gt + fine ICP) -> gate (freeform) ->
 S3 -> S4 -> [S5] -> plan score -> total (capped at 40 when r > 3) -> PASS.
 Ground truth comes only from ``RECADBENCH_GT_DIR`` (``gtstore``). Deterministic: fixed seeds,
 floats rounded to 1e-6 and sorted keys, so the same inputs give a byte-identical result.json.
+
+Layers (ADR 0006): ``layer="official"`` is the pipeline above. ``layer="open"`` scores STEP-only
+submissions: features.json is never required nor scored (only reported as ``details.declared``),
+G0 is geometry-only with the GT-copy backstop always enforced, S2 is S2-face (``q = faces_pred /
+faces_gt``, provisional), S1 / S3 / S4 as official, no S5, and ``pass`` is always false (PASS needs
+Verified); the official PASS clauses with ``q`` for ``r`` go to ``details.pass_checks_open``.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import re
@@ -26,12 +33,12 @@ import numpy as np
 
 from . import __version__, brep, gtstore
 from .align import align
-from .config import CLASS_KEYDIM_TOL, EvalConfig, bands
+from .config import CLASS_KEYDIM_TOL, LAYERS, EvalConfig, bands
 from .deviation import Bands, effective_bands, observable_labels, s1
 from .gate import GateResult, bbox_gate, freeform_gate, gt_copy_gate, static_gate
 from .geom import Samples, Surface, sample
 from .intent import measure_key_dims, relations, score_s3
-from .parsimony import s2
+from .parsimony import s2, s2_face
 from .plan_score import ir_adherence, plan_drift, plan_score
 from .topology import s4
 
@@ -132,6 +139,24 @@ def read_features(p: Path) -> tuple[dict | None, str | None]:
     return doc, None
 
 
+def read_declared(p: Path) -> dict | None:
+    """Open layer: ``{"n_counted", "unmapped"}`` from a submitted features.json, or None when it
+    is missing or unreadable. Reported only; it never changes the Open score or the gate."""
+    if not p.is_file():
+        return None
+    try:
+        doc = _json(p)
+    except (OSError, ValueError, RecursionError):  # ValueError covers JSON and decode errors
+        return None
+    if not isinstance(doc, dict):
+        return None
+    feats = doc.get("features")
+    unmapped = doc.get("unmapped")
+    feats = feats if isinstance(feats, list) else []
+    return {"n_counted": sum(1 for f in feats if isinstance(f, dict) and f.get("counted") is True),
+            "unmapped": len(unmapped) if isinstance(unmapped, list) else 0}
+
+
 def near_point_limit(cfg: EvalConfig, b: Bands) -> float:
     """How far a key-dim / relation face may lie from its GT probe point (mm)."""
     return max(cfg.near_point_max_mm, cfg.near_point_band_k * b.wide)
@@ -206,9 +231,40 @@ def _zero(res: dict, g: GateResult, details: dict) -> dict:
     return res
 
 
+def _open_plan(plans: list[Path], ctx, res: dict, details: dict, metrics: dict) -> None:
+    """Open layer: submitted plan files are untrusted (they come from the zip, not from the
+    worker). Any unreadable, wrong-shaped or unscoreable plan is recorded as an invalid plan
+    (plan_score 0) and never aborts geometry scoring; drift is reported only when computable."""
+    final_p = plans[-1]
+    try:
+        final = _json(final_p)
+        if not isinstance(final, dict):
+            raise ValueError("not a JSON object")
+        ps = plan_score(final, ctx.part.plan, ctx.part.key_dims, ctx.tol, ctx.part.T_scan_to_gt)
+    except Exception as exc:  # untrusted input; the result is informational
+        res["scores"]["plan_score"] = 0.0
+        details["plan"] = {"file": final_p.name, "plan_score": 0.0, "valid": False,
+                           "errors": [f"plan unreadable ({type(exc).__name__})"]}
+        return
+    res["scores"]["plan_score"] = ps["plan_score"]
+    details["plan"] = {"file": final_p.name, **ps}
+    if len(plans) > 1 and ps.get("valid", True) is not False:
+        try:
+            first = _json(plans[0])
+            if not isinstance(first, dict):
+                raise ValueError("not a JSON object")
+            metrics["plan_drift"] = plan_drift(first, final)
+        except Exception as exc:
+            details["plan"]["drift_error"] = f"{plans[0].name} unreadable ({type(exc).__name__})"
+
+
 # -------------------------------------------------------------------------------------- score
 def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig | None = None,
-              *, track: str | None = None, plan_path: str | Path | None = None) -> dict:
+              *, track: str | None = None, plan_path: str | Path | None = None,
+              layer: str = "official") -> dict:
+    if layer not in LAYERS:
+        raise ValueError(f"unknown layer {layer!r} (expected one of {', '.join(LAYERS)})")
+    is_open = layer == "open"
     cfg = cfg or EvalConfig()
     run_dir = Path(run_dir)
     manifest = _json(run_dir / "run_manifest.json")
@@ -220,6 +276,10 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
         res["efficiency"] = eff
     details: dict = {"config": {"seed": cfg.seed, "n_samples": cfg.n_samples,
                                 "k_floor": cfg.k_floor, "s5": cfg.s5}}
+    if is_open:
+        # official results stay byte-identical: the key is written for the Open layer only
+        details["layer"] = layer
+        details["config"]["s5"] = False
     res["details"] = details
     ctx = gt_context(res["part_id"], cfg)
     meta = ctx.part.meta
@@ -228,14 +288,16 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
 
     # ---- plan score (every track that has an IR)
     plans = [Path(plan_path)] if plan_path else plan_files(run_dir)
-    if plans and ctx.part.plan is not None:
+    if plans and ctx.part.plan is not None and is_open:
+        _open_plan(plans, ctx, res, details, metrics)
+    elif plans and ctx.part.plan is not None:
         final = _json(plans[-1])
         ps = plan_score(final, ctx.part.plan, ctx.part.key_dims, ctx.tol, ctx.part.T_scan_to_gt)
         res["scores"]["plan_score"] = ps["plan_score"]
         details["plan"] = {"file": plans[-1].name, **ps}
         if len(plans) > 1:
             metrics["plan_drift"] = plan_drift(_json(plans[0]), final)
-    if res["track"] == "S":
+    if res["track"] == "S" and not is_open:
         res["gate"] = {"ok": False, "reason": "plan-only run (Track S): no geometry scored"}
         res["pass"] = False
         return _rnd(res)
@@ -243,7 +305,13 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     g = GateResult()
     step = run_dir / "out" / "output.step"
     feats_p = _features_path(run_dir)
-    features, feats_err = read_features(feats_p)
+    if is_open:
+        features, feats_err = None, None
+        declared = read_declared(feats_p)
+        if declared is not None:
+            details["declared"] = declared
+    else:
+        features, feats_err = read_features(feats_p)
     details["inputs"] = {"output.step": _sha(step), "features.json": _sha(feats_p)}
     try:
         pred = brep.load_step(step)
@@ -264,6 +332,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
         faces_gt=int(meta["faces_gt"]), pred_volume=brep.volume(pred_one),
         gt_volume=ctx.volume, features=features, cfg=cfg,
         n_shells=len(sols[0].shells()) if len(sols) == 1 else 0, features_error=feats_err,
+        require_features=not is_open,
     )
     if features is not None and features.get("face_count") is not None:
         # report only: the adapter counts native faces, a STEP round trip may split periodic
@@ -305,7 +374,10 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     details["gt_copy"] = gt_copy_gate(
         g, pred_volume=brep.volume(pred_one), gt_volume=ctx.volume, faces_pred=len(recs),
         faces_gt=int(meta["faces_gt"]), p95_all=r1["p95_all"], floor_p95=ctx.part.floor_p95,
-        tight_class=ctx.bands.tight_class, cfg=cfg, enforce=res["track"] != "T")
+        tight_class=ctx.bands.tight_class,
+        # Open: always enforced (whatever the track or cfg; a submission is never Track T)
+        cfg=dataclasses.replace(cfg, gt_copy_check=True) if is_open else cfg,
+        enforce=is_open or res["track"] != "T")
     if not g.ok:
         return _rnd(_zero(res, g, details))
     details["gate"] = {"checks": g.checks, "reasons": []}
@@ -327,10 +399,16 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
     details["S3"] = {**s3d, "dims": [d.as_dict() for d in dims], "relations_detail": rels}
 
     # ---- S2
-    r2 = s2(features, int(meta["n_ref"]), len(recs), int(meta["faces_gt"]), dims, ctx.tol, cfg)
-    metrics.update({"r_feat": r2["r_feat"], "face_ratio": r2["face_ratio"],
-                    "param_coverage": r2["param_coverage"]})
-    details["S2"] = {k: r2[k] for k in ("n_pred", "n_ref", "uncovered_key_dims", "halved_by")}
+    if is_open:
+        r2 = s2_face(len(recs), int(meta["faces_gt"]))
+        metrics["face_ratio"] = r2["face_ratio"]
+        details["S2"] = {"kind": "S2-face", "provisional": r2["provisional"]}
+    else:
+        r2 = s2(features, int(meta["n_ref"]), len(recs), int(meta["faces_gt"]), dims, ctx.tol,
+                cfg)
+        metrics.update({"r_feat": r2["r_feat"], "face_ratio": r2["face_ratio"],
+                        "param_coverage": r2["param_coverage"]})
+        details["S2"] = {k: r2[k] for k in ("n_pred", "n_ref", "uncovered_key_dims", "halved_by")}
 
     # ---- S4
     r4 = s4(brep.genus(pred_gt), ctx.b1, brep.face_type_areas(recs), ctx.hist)
@@ -340,7 +418,7 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
 
     # ---- S5 (flag)
     total = r1["S1"] + r2["S2"] + s3v + r4["S4"]
-    if cfg.s5:
+    if cfg.s5 and not is_open:
         from .editability import s5
 
         r5 = s5(run_dir, pred_one, al.T_total, ctx.part.key_dims, ctx.recs,
@@ -353,11 +431,22 @@ def score_run(run_dir: str | Path, part_id: str | None = None, cfg: EvalConfig |
         total = min(total, cfg.total_cap_lego)
     res["scores"].update({"S1": r1["S1"], "S2": r2["S2"], "S3": s3v, "S4": r4["S4"],
                           "total": total, "capped": capped})
+    key_dims_pass = s3d["key_dims_ok"] >= cfg.pass_key_dims - 1e-12
+    if is_open:
+        # informational only: PASS needs the Verified layer
+        details["pass_checks_open"] = {
+            "gate": True,
+            "s1_targets": r1["targets_met"],
+            "q_in_range": cfg.pass_r_min <= r2["face_ratio"] <= cfg.pass_r_max,
+            "key_dims": key_dims_pass,
+        }
+        res["pass"] = False
+        return _rnd(res)
     pass_checks = {
         "gate": True,
         "s1_targets": r1["targets_met"],
         "r_in_range": cfg.pass_r_min <= r2["r_feat"] <= cfg.pass_r_max,
-        "key_dims": s3d["key_dims_ok"] >= cfg.pass_key_dims - 1e-12,
+        "key_dims": key_dims_pass,
     }
     res["pass"] = all(pass_checks.values())
     details["pass_checks"] = pass_checks

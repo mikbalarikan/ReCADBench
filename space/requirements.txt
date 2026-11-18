@@ -1,0 +1,8 @@
+# ReCADBench Open Space (Gradio UI only; scoring runs in the eval image, see Dockerfile.eval).
+# The Space also needs recadbench_eval/__init__.py + recadbench_eval/submission.py copied next to
+# app.py at deploy time (stdlib only, see README.md "Deploy").
+gradio[oauth]>=6.0,<7
+huggingface_hub>=1.0
+filelock>=3.12
+fastapi
+uvicorn
