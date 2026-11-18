@@ -10,7 +10,7 @@ Static checks (before alignment):
   25.4x; also a volume sanity check, so a thin hollow skin cannot hide behind surface distance);
 - ``features.json`` readable (UTF-8, a BOM is accepted), valid against the spec ``features``
   schema (incl. the ``count`` consistency rule), present (counts are never self-reported) and its
-  ``unmapped`` empty (non-parametric body).
+  ``unmapped`` empty (non-parametric body). Not in the Open layer (``require_features=False``).
 
 Aligned checks:
 - bbox: per-axis extents of the aligned candidate (GT frame) within ``bbox_rel_tol`` of the GT's
@@ -61,8 +61,10 @@ class GateResult:
 def static_gate(g: GateResult, *, n_solids: int, valid: bool, closed: bool,
                 recs: list[FaceRec] | None, n_triangles_planar: int, faces_gt: int,
                 pred_volume: float | None, gt_volume: float, features: dict | None,
-                cfg: EvalConfig, n_shells: int = 1, features_error: str | None = None
-                ) -> GateResult:
+                cfg: EvalConfig, n_shells: int = 1, features_error: str | None = None,
+                require_features: bool = True) -> GateResult:
+    """``require_features=False`` (Open layer, ADR 0006): G0 is geometry-only, a submitted
+    ``features.json`` is never required nor checked here (it is only reported as declared)."""
     g.faces_gt = int(faces_gt)
     if n_solids != 1:
         g.fail("one_solid", f"{n_solids} solids (exactly 1 required)")
@@ -101,6 +103,8 @@ def static_gate(g: GateResult, *, n_solids: int, valid: bool, closed: bool,
                              f"scale {scale:.3f}, > {cfg.bbox_rel_tol:.0%}; units?)")
         else:
             g.passed("volume")
+    if not require_features:
+        return g
     if features_error is not None:
         g.fail("features", features_error)
     elif features is None:

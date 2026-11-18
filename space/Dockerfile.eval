@@ -1,0 +1,31 @@
+# ReCADBench Open evaluation image (HF Jobs). Build from the REPO ROOT:
+#   docker build -f space/Dockerfile.eval -t recadbench-eval:open .
+# Contains the evaluator only: no GT, no tokens, no submitted code. The job downloads the zip and
+# the private GT dataset at run time (space/jobs.py, HFJobsDispatcher) and runs
+#   python -m recadbench_eval.cli score-submission --layer open ...
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MPLBACKEND=Agg
+
+# OCP (OpenCascade wheels) needs a few X/GL runtime libraries even when rendering off-screen.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgl1 libglu1-mesa libxrender1 libxext6 libsm6 \
+    libfontconfig1 libegl1 \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/recadbench
+COPY spec ./spec
+COPY evaluator ./evaluator
+
+# build123d==0.13.0 (evaluator pin) pulls the cadquery-ocp 8.x wheels (OCP kernel).
+RUN pip install --upgrade pip \
+ && pip install ./spec ./evaluator "huggingface_hub>=1.0" \
+ && python -c "import recadbench_eval, build123d, OCP; print('eval image ok', recadbench_eval.__version__)"
+
+RUN useradd -m -u 1000 rcb
+USER rcb
+WORKDIR /home/rcb
+CMD ["python", "-m", "recadbench_eval.cli", "--help"]

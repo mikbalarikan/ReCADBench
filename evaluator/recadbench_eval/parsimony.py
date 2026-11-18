@@ -11,6 +11,8 @@ rather than read from the derived ``count`` field) and ``N_ref`` = ``meta.yaml: 
   values or numeric feature ``params``; a diameter may be driven by a radius and vice versa)
   matching the candidate's measured value or the GT nominal within the class tolerance;
   coverage < 50% -> S2 halved.
+
+Open layer (ADR 0006): ``s2_face`` scores ``q = faces_pred / faces_gt`` instead (no features).
 """
 
 from __future__ import annotations
@@ -103,3 +105,28 @@ def s2(features: dict, n_ref: int, faces_pred: int, faces_gt: int, dims, tol: fl
         "halved_by": halved,
         "cap_total": r > 3.0,
     }
+
+
+def s2_face(faces_pred: int, faces_gt: int) -> dict:
+    """S2-face (Open layer, ADR 0006 section 2): the parsimony proxy for STEP-only submissions.
+
+    ``q = faces_pred / faces_gt`` mapped to a STEP curve (no linear decay): a continuous curve
+    would let anyone invert the public S2 (or total) back to the GT face count. Steps, calibrated
+    on the 46 gate-ok P11 pilot runs (agents usually leave out GT fillets/chamfers, so
+    q ~ 0.55 r on Track E): [0.35, 1.5] -> 25, (1.5, 2] -> 15, (2, 3] -> 5, [0.25, 0.35) -> 10,
+    else 0 (mean |S2-face - S2| = 1.9 over all runs, 5.1 on Track E). The public report shows
+    the same buckets. No param-coverage or face-ratio halving; ``q > 3`` caps the total
+    (``total_cap_lego``). Provisional: recalibrate with the broadcast runs.
+    """
+    q = faces_pred / faces_gt if faces_gt else 0.0
+    if 0.35 <= q <= 1.5:
+        v = 25.0
+    elif 1.5 < q <= 2.0:
+        v = 15.0
+    elif 2.0 < q <= 3.0:
+        v = 5.0
+    elif 0.25 <= q < 0.35:
+        v = 10.0
+    else:
+        v = 0.0
+    return {"S2": v, "face_ratio": q, "cap_total": q > 3.0, "provisional": True}

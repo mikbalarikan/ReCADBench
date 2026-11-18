@@ -29,7 +29,11 @@ def load_step(path: str | Path):
         shape = import_step(str(p))
     except Exception as exc:  # noqa: BLE001 - any kernel failure is a load failure
         raise ValueError(f"{p.name}: STEP does not load ({exc})") from exc
-    if shape is None or shape.wrapped is None or shape.wrapped.IsNull():
+    try:
+        empty = shape is None or shape.wrapped is None or shape.wrapped.IsNull()
+    except (AssertionError, AttributeError):  # build123d asserts on a shape with no content
+        empty = True
+    if empty:
         raise ValueError(f"{p.name}: STEP is empty")
     return shape
 
