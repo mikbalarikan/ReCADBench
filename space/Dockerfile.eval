@@ -1,4 +1,6 @@
-# ReCADBench Open evaluation image (HF Jobs). Build from the REPO ROOT:
+# ReCADBench Open evaluation image for a LATER HF Jobs mode (not deployed: the public Space scores
+# in-Space with space/docker/Dockerfile, which must keep this file's OCP base). Build from the
+# REPO ROOT:
 #   docker build -f space/Dockerfile.eval -t recadbench-eval:open .
 # Contains the evaluator only: no GT, no tokens, no submitted code. The job downloads the zip and
 # the private GT dataset at run time (space/jobs.py, HFJobsDispatcher) and runs

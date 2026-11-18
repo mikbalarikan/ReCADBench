@@ -63,7 +63,7 @@ published) is future work; only it can carry contamination-free claims.
 
 ### 5. Hosting (owner decision D2)
 
-Space and datasets live under the Hugging Face account `robotoguz`. Every publication step (Space, datasets, making
+Space and datasets live under the Hugging Face account `mikbalarikan` (owner changed D2 on 2026-11-18; first planned `robotoguz`). Every publication step (Space, datasets, making
 anything public) is done by the owner or with the owner's explicit approval.
 
 ### 6. Leak rules
@@ -76,3 +76,16 @@ no `gt_plan`. A test asserts that the report HTML contains no key-dim nominal. `
 - The evaluator gains `--track O` (STEP-only scoring) and `score-submission` (zip → per-task results + summary).
 - Open and Official scores are not comparable to each other at the row level; the leaderboard shows both columns.
 - The 4 live-broadcast stations (SR-MCP, NX-B, NX-D, B3D-B) are added as reference rows with both scores.
+
+## Launch notes (2026-11-18, owner decisions)
+
+- **Account:** everything lives under `huggingface.co/mikbalarikan` (D2 changed from `robotoguz`):
+  `recadbench-inputs` (public dataset), `recadbench-gt` (private), `recadbench-submissions` (private),
+  `recadbench-open` (public Space).
+- **In-Space scoring instead of HF Jobs (changes D1's execution part, not GT hosting):** the Space is a Docker Space
+  (HF PRO, cpu-basic) that also scores. `RCB_MODE=space`: the private GT is downloaded at start to `$HOME/.rcb-gt`
+  (never a Gradio-served path), each submission is scored by a `python -I` subprocess that gets no `HF_TOKEN` /
+  `OAUTH_*` / `*TOKEN*` / `*SECRET*` variable, one at a time (`RCB_MAX_PARALLEL=1`, per-task timeout 420 s, run cap
+  45 min). The app is PID 1 (no init wrapper) and non-dumpable, so the scorer cannot read the token from `/proc`.
+  Residual risk accepted by the owner: a compromised scorer (malicious STEP exploiting the parser) can read the GT
+  and reach the network. `HFJobsDispatcher` stays in the code (`RCB_MODE=hub`) for a later switch.

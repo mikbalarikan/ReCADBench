@@ -602,7 +602,7 @@ def test_local_dispatcher_command_and_status(tmp_path):
         def poll(self):
             return self.rc
 
-    def popen(cmd, env, stdout, stderr):
+    def popen(cmd, env, stdout, stderr, **kw):
         launched["cmd"], launched["env"] = cmd, env
         launched["proc"] = Proc()
         return launched["proc"]
@@ -610,7 +610,7 @@ def test_local_dispatcher_command_and_status(tmp_path):
     d = jobs.LocalDispatcher(tmp_path, gt_dir="/gt", popen=popen, python="py")
     job = d.dispatch("sub-0123abcd", sha_of(3), "/z.zip")
     cmd = launched["cmd"]
-    assert cmd[:4] == ["py", "-m", "recadbench_eval.cli", "score-submission"]
+    assert cmd[:5] == ["py", "-I", "-m", "recadbench_eval.cli", "score-submission"]
     assert "--layer" in cmd and cmd[cmd.index("--layer") + 1] == "open"
     assert cmd[cmd.index("--submission-id") + 1] == "sub-0123abcd"
     assert launched["env"]["RECADBENCH_GT_DIR"] == "/gt"
@@ -800,3 +800,350 @@ def test_app_builds_and_serves_reports(tmp_path, monkeypatch):
     assert client.get("/reports/sub-0000beef/results.jsonl").status_code == 404
     assert client.get("/reports/sub-nothere0/report.html").status_code == 404
     assert client.get("/").status_code == 200
+
+
+# --- UI views (pure HTML builders) -----------------------------------------------------------
+
+
+def test_stats_counts_scored_validated_and_best():
+    rows = [
+        _done("sub-00000001", 30.0, submission_name="a", validated=True),
+        _done("sub-00000002", 70.5, submission_name="<b>best</b>"),
+        {"submission_id": "sub-00000004", "status": "pending", "open_total": 99.0},
+        {"submission_id": "sub-00000005", "status": "failed"},
+    ]
+    s = lb.stats(rows, TASKS)
+    assert s == {"n_tasks": 2, "n_scored": 2, "n_validated": 1, "best_open": 70.5,
+                 "best_name": "<b>best</b>"}  # fmt: skip
+    tiles = lb.stats_html(s)
+    assert "70.5" in tiles and "&lt;b&gt;best&lt;/b&gt;" in tiles and "<b>best" not in tiles
+    # reference rows rank on the board (best) but are not counted as submissions
+    ref = _done("sub-00000003", 80.0, submission_name="ref", reference=True)
+    s = lb.stats([*rows, ref], TASKS)
+    assert s["n_scored"] == 2 and s["best_open"] == 80.0 and s["best_name"] == "ref"
+    empty = lb.stats([], TASKS)
+    assert empty["n_scored"] == 0 and empty["best_open"] is None
+    assert "&ndash;" in lb.stats_html(empty) and ">2<" in lb.stats_html(empty)
+
+
+def test_leaderboard_html_empty_state():
+    out = lb.leaderboard_html([], TASKS)
+    assert "No submissions yet" in out and "Be the first" in out
+    assert "data-tab='Take part'" in out and "<table" not in out
+    # only unfinished rows still render the table (no empty state)
+    out = lb.leaderboard_html([{"submission_id": "sub-00000001", "status": "pending"}], TASKS)
+    assert "<table" in out and "Be the first" not in out and "queued" in out
+
+
+def test_leaderboard_html_escapes_user_strings_and_builds_safe_links():
+    rows = [
+        _done("sub-00000001", 50.0, submission_name="<script>alert(1)</script>",
+              submitter_name="<img src=x onerror=alert(1)>", model="m'\"x",
+              agent_url="javascript:alert(1)", human_in_loop=True),
+        _done("sub-00000002", 60.0, submission_name="ok", validated=True,
+              agent_url="https://ok.example/a?x=1&y='2'"),
+        _done("sub-00000003", 40.0, submission_name="station", reference=True,
+              agent_url="data:text/html,hi"),
+        {"submission_id": "sub-00000004", "status": "failed", "submission_name": "f"},
+    ]  # fmt: skip
+    out = lb.leaderboard_html(rows, TASKS)
+    for bad in ("<script", "<img", "javascript:", "data:text", "m'\"x"):
+        assert bad not in out, bad
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in out and "m&#x27;&quot;x" in out
+    assert "href='https://ok.example/a?x=1&amp;y=&#x27;2&#x27;'" in out
+    assert "rel='nofollow noopener noreferrer ugc'" in out
+    # report links only for scored, non-reference rows, built from the validated id
+    assert out.count("class='rcb-report'") == 2
+    assert "reports/sub-00000002.html" in out and "reports/sub-00000003.html" not in out
+    assert "reports/sub-00000004.html" not in out
+    # ranks / badges: best first, medals for the top three, unfinished rows unranked
+    assert out.index(">ok<") < out.index("&lt;script&gt;") < out.index("station")
+    assert "rcb-rank r1'>1<" in out and "rcb-rank r3'>3<" in out
+    for badge in ("validated", "unvalidated", "reference", "human in loop", "failed"):
+        assert f">{badge}</span>" in out, badge
+
+
+def test_component_means_over_all_tasks():
+    row = _done("sub-00000001", 1.0, per_task={
+        "r385_hs01_motor_mount": {"status": "ok", "S1": 30.0, "S2": 25, "S3": 10.0, "S4": 5.0},
+        "od_h11_thermoblock": {"status": "gate_fail", "total": 0.0},
+    })  # fmt: skip
+    assert lb.component_means(row, TASKS) == {"S1": 15.0, "S2": 12.5, "S3": 5.0, "S4": 2.5}
+    assert lb.component_means(_done("sub-00000002", 1.0), TASKS) is None
+    out = lb.leaderboard_html([row], TASKS)
+    assert ">15.0<" in out and ">12.5<" in out
+
+
+def test_safe_url():
+    assert lb.safe_url("https://a.example/x") == "https://a.example/x"
+    assert lb.safe_url("http://a.example") == "http://a.example"
+    for bad in ("javascript:alert(1)", "data:x", "//a.example", "https://", "ftp://a", "",
+                None, 3, "https://a.example/ x", "https://a.example/\nx"):  # fmt: skip
+        assert lb.safe_url(bad) is None, bad
+
+
+def test_my_submissions_html():
+    rows = [
+        _done("sub-00000001", 42.0, submission_name="mine", hf_user="alice"),
+        {"submission_id": "sub-00000002", "status": "failed", "hf_user": "alice",
+         "submission_name": "x", "status_message": "<b>boom</b>"},
+        _done("sub-00000003", 1.0, submission_name="theirs", hf_user="bob"),
+    ]  # fmt: skip
+    assert "Sign in" in lb.my_submissions_html(rows, None)
+    assert "No submissions yet" in lb.my_submissions_html(rows, "carol")
+    out = lb.my_submissions_html(rows, "alice")
+    assert "mine" in out and "theirs" not in out and "42.0" in out
+    assert "&lt;b&gt;boom&lt;/b&gt;" in out and "<b>boom" not in out
+    assert out.index("sub-00000002") < out.index("sub-00000001")  # newest first
+    assert "reports/sub-00000001.html" in out and "reports/sub-00000002.html" not in out
+
+
+def test_tasks_public_layer_merge_order_and_fallbacks(tmp_path):
+    pub = tmp_path / "tasks_public.json"
+    pub.write_text(json.dumps([
+        {"id": "od_h11_thermoblock", "no": 1, "title": "Thermo <block>", "family": "Open Dedica",
+         "difficulty": "very hard"},
+        {"id": "r385_hs01_motor_mount", "no": 2, "title": "Old title", "difficulty": "medium"},
+    ]), encoding="utf-8")  # fmt: skip
+    tj = tmp_path / "tasks.json"
+    tj.write_text(json.dumps([
+        {"id": "r385_hs01_motor_mount", "title": "Motor mount cup", "tolerance_class": "B",
+         "triangles": 299403, "gt_volume": 1.5},
+    ]), encoding="utf-8")  # fmt: skip
+    tasks = lb.load_tasks(tj, TASKS, pub)
+    assert tasks[0] == {
+        "id": "r385_hs01_motor_mount", "no": 2, "title": "Motor mount cup",
+        "difficulty": "medium", "tolerance_class": "B", "triangles": 299403,
+    }  # fmt: skip
+    ordered = lb.order_tasks(tasks)
+    assert [t["id"] for t in ordered] == ["od_h11_thermoblock", "r385_hs01_motor_mount"]
+    # without any metadata: humanized title, family from the id prefix, position number
+    bare = {"id": "r385_dr02_wobble_plate"}
+    assert lb.task_title(bare) == "Wobble plate" and lb.task_number(bare, 4) == 5
+    assert lb.task_family(bare) == "R385 diaphragm pump"
+    assert lb.task_family({"id": "od_x"}) == "Open Dedica espresso machine"
+    assert lb.order_tasks([{"id": "b"}, {"id": "a"}]) == [{"id": "b"}, {"id": "a"}]
+    # unreadable files fall back to bare ids
+    bad = tmp_path / "bad.json"
+    bad.write_text("{nope", encoding="utf-8")
+    assert lb.load_tasks(bad, TASKS, bad) == [{"id": t} for t in TASKS]
+
+
+def test_task_card_html_escaping_fields_and_links():
+    task = {"id": "od_h11_thermoblock", "no": 10, "title": "<i>Thermo</i>", "family": "F & G",
+            "difficulty": "very hard", "tolerance_class": "C", "tier": 3, "triangles": 1234567,
+            "known_defects": ["<script>x</script>", ""]}  # fmt: skip
+    card = lb.task_card_html(task, "org/inputs", "https://cdn.example/p.png",
+                             fallback_url="/assets/tasks/od_h11_thermoblock.webp")  # fmt: skip
+    assert "<i>" not in card and "&lt;i&gt;Thermo&lt;/i&gt;" in card and "F &amp; G" in card
+    assert "<script" not in card and "Known scan defects (1)" in card and "<details>" in card
+    assert "rcb-pill d-very-hard" in card and ">10<" in card and "1.23M" in card
+    assert "this.src=&#x27;/assets/tasks/od_h11_thermoblock.webp&#x27;" in card
+    assert "datasets/org/inputs/resolve/main/parts/od_h11_thermoblock/task.yaml" in card
+    # a fallback that is not the bundled render for this id is never put into the handler
+    card = lb.task_card_html(task, None, "p.png", fallback_url="x');alert(1);('")
+    assert "alert" not in card and "this.style.display=&#x27;none&#x27;" in card
+    assert "input.stl" not in card  # no repo -> no download links
+    # no preview -> placeholder with the task number, no <img>
+    assert "<img" not in lb.task_card_html({"id": "a_b"}, None, index=2)
+    grid = lb.tasks_grid_html([task, {"id": "a_b"}], "org/inputs", {"a_b": ("/x.webp", None)})
+    assert grid.count("class='rcb-card'") == 2 and "src='/x.webp'" in grid
+
+
+def test_heatmap_columns_follow_given_order_and_numbers():
+    per = {"od_h11_thermoblock": {"status": "ok", "total": 50.0}}
+    rows = [_done("sub-00000001", 40.0, per_task=per)]
+    tasks = [{"id": "od_h11_thermoblock", "no": 1, "title": "Thermoblock"},
+             {"id": "r385_hs01_motor_mount", "no": 2}]  # fmt: skip
+    out = lb.heatmap_html(rows, ["od_h11_thermoblock", "r385_hs01_motor_mount"], tasks)
+    assert out.index("h11") < out.index("hs01") and "01<br>" in out and "02<br>" in out
+    assert "title='Thermoblock (od_h11_thermoblock)'" in out and "missing" in out
+
+
+# --- app pages and static assets -------------------------------------------------------------
+
+
+def _local_app(tmp_path, **extra):
+    pytest.importorskip("gradio")
+    import app as space_app
+
+    env = {"RCB_MODE": "local", "RCB_LOCAL_ROOT": str(tmp_path), "RECADBENCH_GT_DIR": "/gt"}
+    store, disp, cfg = space_app.build_backends({**env, **extra})
+    return space_app, store, disp, cfg
+
+
+def test_resolve_assets_dir_prefers_space_assets(tmp_path):
+    pytest.importorskip("gradio")
+    import app as space_app
+
+    repo = tmp_path / "repo"
+    here = repo / "space"
+    here.mkdir(parents=True)
+    assert space_app.resolve_assets_dir(here) is None
+    (repo / "docs" / "assets").mkdir(parents=True)
+    assert space_app.resolve_assets_dir(here) == repo / "docs" / "assets"
+    (here / "assets").mkdir()
+    assert space_app.resolve_assets_dir(here) == here / "assets"
+    assert space_app.resolve_tasks_public(here) is None
+    (repo / "docs" / "benchmark").mkdir(parents=True)
+    (repo / "docs" / "benchmark" / "tasks_public.json").write_text("[]", encoding="utf-8")
+    assert space_app.resolve_tasks_public(here).name == "tasks_public.json"
+
+
+def test_static_pages_content(tmp_path):
+    space_app, _, _, cfg = _local_app(tmp_path)
+    keys, limits = space_app.submission_constants()
+    page = space_app.take_part_html(cfg)
+    cmd = "hf download mikbalarikan/recadbench-inputs --repo-type dataset --local-dir recadbench"
+    assert cmd in page and "python tools/sanity_check_submission.py submission.zip" in page
+    for k in keys:  # the meta.json example has exactly the required keys
+        assert f"&quot;{k}&quot;" in page, k
+    assert cfg.task_ids[0] in page and "data-copy" in page
+    cfg.inputs_repo = "org/my-inputs"
+    assert "hf download org/my-inputs --repo-type dataset" in space_app.take_part_html(cfg)
+    head = space_app.header_html(cfg)
+    assert "https://huggingface.co/datasets/org/my-inputs" in head
+    for link in (space_app.GITHUB_URL, space_app.LIVE_URL, "SUBMISSION.md", "LICENSE"):
+        assert link in head, link
+    rules = space_app.rules_html()
+    assert f"{limits['zip_bytes'] // 2**20} MB" in rules and "per UTC day" in rules
+    faq = space_app.faq_html(cfg)
+    phrases = ("private dataset", "never serves", "without extracting or executing",
+               "3 submissions", "human_in_loop", "hidden test set", "/issues")  # fmt: skip
+    for phrase in phrases:
+        assert phrase in faq, phrase
+    assert "S2-face" in space_app.scoring_html(cfg) and "/95" in space_app.scoring_html(cfg)
+    cfg.assets_dir = None  # no assets: text title instead of a broken banner image
+    assert "banner-dark.webp" not in space_app.header_html(cfg)
+    assert "flow-dark.webp" not in space_app.scoring_html(cfg)
+
+
+@pytest.mark.parametrize("mode", ["space", "local", "hub"])
+def test_scoring_location_text_matches_mode(tmp_path, mode):
+    """The deployed Space (space mode) scores in a subprocess next to the app: the page must not
+    promise an isolated HF Job there; only hub mode (HF Jobs) says so."""
+    space_app, _, _, cfg = _local_app(tmp_path)
+    cfg.mode = mode
+    text = space_app.step4_header_html(cfg) + space_app.faq_html(cfg)
+    job_claims = ("isolated", "Hugging Face Job", "scoring job", "leave the job")
+    if mode == "hub":
+        assert "isolated" in text and "Hugging Face Job" in text
+        return
+    for claim in job_claims:
+        assert claim not in text, claim
+    for phrase in ("separate scorer process", "queue", "never receives the access token",
+                   "private folder that the site never serves", "public report",
+                   "score row", "one at a time"):  # fmt: skip
+        assert phrase in text, phrase
+    assert ("this Space" in text) == (mode == "space")
+    cfg.max_parallel = 2
+    text = space_app.step4_header_html(cfg) + space_app.faq_html(cfg)
+    assert "up to 2 at a time" in text and "one at a time" not in text
+
+
+def _css_selectors(css: str) -> list[str]:
+    import re
+
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    out = []
+    for prelude in re.findall(r"([^{};]+)\{", css):
+        prelude = prelude.strip()
+        if prelude and not prelude.startswith("@"):
+            out += [s.strip() for s in prelude.split(",")]
+    return out
+
+
+def test_css_uses_dark_only_as_leading_ancestor():
+    """Gradio copies every custom rule whose selector contains ".dark" into a dark-mode-only
+    rule (".dark" moved in front). A ".dark" anywhere else (e.g. img.dark) silently breaks light
+    mode, so ".dark" may only open a selector."""
+    from theme import CSS
+
+    sels = _css_selectors(CSS)
+    assert ".rcb-flow img.flow-d" in sels and ".dark .rcb-flow img.flow-l" in sels
+    bad = [s for s in sels if ".dark" in s and not (s == ".dark" or s.startswith(".dark "))]
+    assert bad == []
+    assert ".dark" not in "".join(s.removeprefix(".dark") for s in sels)
+
+
+def test_page_html_has_no_dark_or_light_class(tmp_path):
+    """An element with class "dark" would also switch its subtree to the dark-mode rules."""
+    import re
+
+    space_app, _, _, cfg = _local_app(tmp_path)
+    if cfg.assets_dir is None:
+        pytest.skip("no space/assets or docs/assets in this checkout")
+    pages = (
+        space_app.header_html(cfg),
+        space_app.take_part_html(cfg),
+        space_app.scoring_html(cfg),
+        space_app.faq_html(cfg),
+        space_app.rules_html(),
+    )
+    for page in pages:
+        for classes in re.findall(r"class='([^']*)'", page):
+            assert not {"dark", "light"} & set(classes.split()), classes
+    flow = space_app.scoring_html(cfg)
+    assert "class='flow-d'" in flow and "/assets/flow-dark.webp" in flow
+    if (cfg.assets_dir / "flow-light.webp").is_file():
+        assert "class='flow-l'" in flow and "only-d" not in flow
+
+
+def test_code_block_copy_button_sits_with_the_pre():
+    pytest.importorskip("gradio")
+    import app as space_app
+
+    block = space_app._code("echo <hi>", "shell")
+    # label first, then a .box holding exactly the button and the <pre> (the JS reads the code
+    # through the button's parent element)
+    head = "<div class='rcb-code'><div class='label'>shell</div><div class='box'>"
+    button = "<button class='copy' type='button' data-copy>Copy</button>"
+    assert block.startswith(head + button + "<pre><code>echo &lt;hi&gt;</code></pre></div></div>")
+    assert "c.parentElement.querySelector('code')" in space_app.HTML_JS
+    from theme import CSS
+
+    assert ".rcb-code .box { position: relative; }" in CSS
+
+
+def test_header_banner_says_live(tmp_path):
+    space_app, _, _, cfg = _local_app(tmp_path)
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "banner-dark.webp").write_bytes(b"RIFF")
+    cfg.assets_dir = assets
+    head = space_app.header_html(cfg)
+    assert "/assets/banner-dark.webp" in head and "rcb-banner-live" in head and "live</b>" in head
+    assert "soon" not in head
+    (assets / space_app.BANNER_LIVE).write_bytes(b"RIFF")  # a launch banner replaces the overlay
+    head = space_app.header_html(cfg)
+    assert f"/assets/{space_app.BANNER_LIVE}" in head and "rcb-banner-live" not in head
+
+
+def test_app_serves_brand_assets_previews_and_gradio_build(tmp_path):
+    import re
+
+    inputs = tmp_path / "inputs"
+    (inputs / "parts" / "r385_hs01_motor_mount").mkdir(parents=True)
+    (inputs / "parts" / "r385_hs01_motor_mount" / "preview.png").write_bytes(b"\x89PNG-fake")
+    space_app, store, disp, cfg = _local_app(tmp_path, RCB_INPUTS_DIR=str(inputs))
+    if cfg.assets_dir is None:
+        pytest.skip("no space/assets or docs/assets in this checkout")
+    from fastapi.testclient import TestClient
+
+    client = TestClient(space_app.build_app(store, disp, cfg))
+    r = client.get("/assets/banner-dark.webp")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
+    assert client.get("/assets/nope.webp").status_code == 404
+    assert client.get("/assets/../store/results.jsonl").status_code == 404
+    # Gradio's own frontend build is also served under /assets and must still load
+    page = client.get("/")
+    assert page.status_code == 200
+    js = re.search(r"assets/(index-[\w-]+\.js)", page.text)
+    assert js and client.get(f"/assets/{js.group(1)}").status_code == 200
+    # local inputs previews: only known task ids
+    assert client.get("/previews/r385_hs01_motor_mount.png").content == b"\x89PNG-fake"
+    assert client.get("/previews/od_h11_thermoblock.png").status_code == 404
+    assert client.get("/previews/..%2F..%2Fsecret.png").status_code == 404
+    url, fallback = space_app._preview_url(cfg, "r385_hs01_motor_mount")
+    assert url == "previews/r385_hs01_motor_mount.png"
+    assert fallback == "/assets/tasks/r385_hs01_motor_mount.webp"

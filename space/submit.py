@@ -13,10 +13,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from jobs import Dispatcher, refresh_jobs
-from store import Store
+from jobs import QUEUED, RUNNING, Dispatcher, ScoringQueue, refresh_jobs
+from store import Store, waiting_rows
 
 MAX_PER_DAY = 3
+# in-app scoring (one scorer slot): one open submission per user, a bounded waiting line
+OPEN_STATUSES = ("pending", "scoring")
+MAX_WAITING = 20
 ZIP_LIMIT_BYTES = 300 * 2**20  # contract LIMITS["zip_bytes"]; the evaluator copy wins if importable
 
 # The 10 public dev task ids (ReCADBench-data/splits/dev.txt). Override with RCB_TASKS_FILE.
@@ -121,8 +124,14 @@ def handle_submission(
     task_ids: list[str] | None = None,
     inspect: Callable | None = None,
     zip_limit: int | None = None,
+    queue: ScoringQueue | None = None,
 ) -> str:
-    """Validate, record and dispatch one upload. Returns the status text shown to the user."""
+    """Validate, record and dispatch one upload. Returns the status text shown to the user.
+
+    With a ``queue`` (local scoring: local mode and the deployed Space) the upload is copied
+    into the work folder, the row waits as ``pending`` and the queue starts it in FIFO order;
+    without one (HF Jobs) it is dispatched at once.
+    """
     now = now or datetime.now(UTC)
     user = username(profile)
     if not user:
@@ -159,6 +168,14 @@ def handle_submission(
         )
     if uploads_today(rows, user, now) >= MAX_PER_DAY:
         return f"Error: limit of {MAX_PER_DAY} submissions per user per UTC day reached."
+    if queue is not None and not is_admin(profile):  # one scorer slot: share it fairly
+        if any(r.get("hf_user") == user and r.get("status") in OPEN_STATUSES for r in rows):
+            return (
+                "Error: you already have a submission waiting or being scored; upload the "
+                "next one when it has finished."
+            )
+        if len(waiting_rows(rows)) >= MAX_WAITING:
+            return "Error: the scoring queue is full; please try again later."
 
     if existing is not None:
         sid = existing["submission_id"]
@@ -167,6 +184,11 @@ def handle_submission(
             sid = submission_id_for(sub.sha256, rows)
         except ValueError:
             return "Error: could not assign a submission id; please try again later."
+    if queue is not None:
+        try:  # before the row exists, so the scorer always finds its local copy
+            queue.stage(sub.sha256, zip_path)
+        except (OSError, ValueError):
+            return "Error: could not store the upload; please try again."
     meta = sub.meta if isinstance(sub.meta, dict) else {}
     row = {k: meta[k] for k in META_ROW_KEYS if k in meta}
     row.update(
@@ -193,14 +215,23 @@ def handle_submission(
 
     try:
         ref = store.put_zip(sub.sha256, zip_path)
-        job_id = dispatcher.dispatch(sid, sub.sha256, ref)
+        job_id = None if queue is not None else dispatcher.dispatch(sid, sub.sha256, ref)
     except Exception as e:  # noqa: BLE001 - shown as a failed row, never a traceback
         store.update_result(sid, status="failed", status_message="could not start scoring")
         why = type(e).__name__
         return f"Error: could not start scoring ({why}). Submission {sid} marked failed."
-    store.update_result(sid, job_id=job_id)
-
-    lines = [f"Submission {sid} received and queued for scoring."]
+    if queue is not None:
+        try:
+            queue.pump()
+        except Exception:  # noqa: BLE001 - the poller retries; the row stays pending
+            pass
+        first = queue.describe(sid)
+        if first.startswith("Error:"):
+            return first
+        lines = [first]
+    else:
+        store.update_result(sid, job_id=job_id)
+        lines = [f"Submission {sid} received and queued for scoring."]
     n_missing = len(getattr(sub, "missing", []) or [])
     if n_missing:
         lines.append(f"{n_missing} task(s) without output.step will score 0.")
@@ -214,8 +245,13 @@ def sweep_pending(
     dispatcher: Dispatcher | None = None,
     max_age_h: float = 2,
     now: datetime | None = None,
+    keep_waiting: bool = False,
 ) -> list[str]:
-    """Startup sweep: merge finished jobs, then mark stale pending/scoring rows failed."""
+    """Startup sweep: merge finished jobs, then mark stale pending/scoring rows failed.
+
+    ``keep_waiting`` (in-app queue): rows still waiting for a scorer (pending, no job id) are
+    re-queued, never failed; only dispatched runs can go stale.
+    """
     now = now or datetime.now(UTC)
     if dispatcher is not None:
         try:
@@ -226,6 +262,8 @@ def sweep_pending(
     cutoff = now - timedelta(hours=max_age_h)
     for r in store.list_results():
         if r.get("status") not in ("pending", "scoring"):
+            continue
+        if keep_waiting and r.get("status") == "pending" and not r.get("job_id"):
             continue
         ts = _parse_iso(r.get("queued_at")) or _parse_iso(r.get("submitted_at"))
         if ts is None or ts < cutoff:
@@ -255,6 +293,7 @@ def admin_action(
     store: Store,
     dispatcher: Dispatcher,
     now: datetime | None = None,
+    queue: ScoringQueue | None = None,
 ) -> str:
     """promote | demote | rescore | delete. The caller's username must be in RCB_ADMINS."""
     if not is_admin(profile):
@@ -272,6 +311,20 @@ def admin_action(
     if action == "delete":
         store.delete_result(sid)
         return f"{sid} deleted."
+    if action == "rescore" and queue is not None:
+        job = row.get("job_id")
+        if job and row.get("status") in ("pending", "scoring"):
+            if dispatcher.status(job) in (QUEUED, RUNNING):
+                return f"Error: {sid} is being scored right now."
+        store.update_result(
+            sid, status="pending", job_id="", status_message="",
+            queued_at=_iso(now or datetime.now(UTC)),
+        )  # fmt: skip
+        try:
+            queue.pump()
+        except Exception:  # noqa: BLE001 - the poller retries
+            pass
+        return f"{sid} queued for rescoring."
     if action == "rescore":
         sha = row.get("sha256", "")
         try:
