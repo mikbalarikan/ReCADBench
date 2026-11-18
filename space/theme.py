@@ -266,6 +266,9 @@ CSS = r"""
 }
 .rcb-tagline { font-size: 1.02rem; color: #ECF1F5; margin: 0; flex: 1 1 360px; }
 .rcb-tagline b { color: #00E5FF; font-weight: 700; }
+.rcb-tagline a {
+  color: #00E5FF; text-decoration: underline dotted; text-underline-offset: 3px; font-weight: 700;
+}
 .rcb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .rcb-chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px;
@@ -434,6 +437,45 @@ table.rcb-board tr.unfinished td { opacity: .78; }
   font: 600 12px var(--rcb-mono); color: var(--rcb-text) !important; white-space: nowrap;
 }
 .rcb-report:hover { border-color: var(--rcb-cyan); color: var(--rcb-cyan) !important; }
+
+/* ---------- per-task board ---------- */
+table.rcb-taskboard { min-width: 1040px; }
+.rcb-taskhead {
+  display: flex; align-items: center; gap: 14px; margin: 4px 0 12px 0; padding: 12px 16px;
+  background: var(--rcb-surface); border: 1px solid var(--rcb-border); border-radius: 14px;
+}
+.rcb-taskhead .no {
+  font: 400 1.6rem/1 var(--rcb-display); letter-spacing: .03em; padding: 7px 10px;
+  border-radius: 10px; background: #0D161F; color: #ECF1F5; border: 1px solid #22313F;
+}
+.rcb-taskhead .title {
+  font: 400 1.45rem/1.1 var(--rcb-display); letter-spacing: .02em; color: var(--rcb-text);
+}
+.rcb-taskhead .meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 5px;
+  font-size: 13px; color: var(--rcb-muted);
+}
+.rcb-gate {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font: 600 11.5px/1.5 var(--rcb-mono);
+}
+.rcb-gate.ok { color: var(--rcb-lime); background: var(--rcb-lime-soft); }
+.rcb-gate.no { color: var(--rcb-red); background: var(--rcb-red-soft); cursor: help; }
+.rcb-gate-why {
+  max-width: 220px; margin-top: 3px; font-size: 11.5px; line-height: 1.35; white-space: normal;
+  color: var(--rcb-muted);
+}
+.rcb-gate-why summary { cursor: pointer; }
+.rcb-gate-why[open] { min-width: 200px; }
+.rcb-task-pick .caption-label { font-size: 12px; }
+/* the shown task is the header/board, not Gradio's last-clicked thumbnail: no "selected" ring */
+.rcb-task-pick .thumbnail-item.selected:not(:hover) {
+  --ring-color: transparent !important; border-color: var(--border-color-primary) !important;
+}
+/* task picker (gr.Gallery): all 10 thumbnails without an inner scroll bar; 3 columns on phones */
+.rcb-task-pick .grid-wrap {
+  min-height: 0 !important; max-height: none !important; height: auto !important;
+}
 
 /* ---------- empty state / notes ---------- */
 .rcb-empty {
@@ -749,6 +791,10 @@ table.rcb-mine { min-width: 560px; }
   .rcb-h h2 { font-size: 1.4rem; }
   .rcb-points td { padding: 8px; }
   .rcb-points .pts { font-size: 1.35rem; width: 52px; }
+  .rcb-task-pick .grid-container {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-rows: none !important; grid-auto-rows: auto !important;
+  }
 }
 @media (max-width: 420px) {
   .rcb-grid { grid-template-columns: minmax(0, 1fr); }

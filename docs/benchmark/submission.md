@@ -55,6 +55,21 @@ The task folders sit at the top level of the zip (not under `parts/`). `meta.jso
 Folder names must be exactly the task ids. No other top-level entries. No symlinks, absolute paths or `..`.
 Limits: zip ≤ 300 MB, each STEP ≤ 50 MB, 3 submissions per Hugging Face user per UTC day.
 
+### Single-task submissions
+
+Solved only one scan? Upload it. The smallest valid zip is `meta.json` plus one task folder:
+
+```
+submission.zip
+  meta.json
+  r385_hs01_motor_mount/
+    output.step
+```
+
+On the overall Open /95 board the other tasks count as 0. The **Per task** tab of the Space ranks every
+submission that covers a task (its `output.step` was scored; a gate failure counts 0) on that task alone, so a
+strong single-task result is visible there.
+
 ## How it is scored
 
 | Layer | Needs | Scores |
@@ -72,7 +87,8 @@ Full rubric: [03_SCORING.md](../architecture/03_SCORING.md). Your report shows p
 - Do not use public CAD of the same commercial products (contamination). Declare anything you used.
 - `human_in_loop: true` if a person edited geometry or steered the agent beyond the initial prompt; those rows get a
   separate badge.
-- Partial submissions are fine; unsolved tasks score 0.
+- Partial and single-task submissions are fine; unsolved tasks score 0 on the overall board, and each task that is
+  scored is ranked in the Space's Per task view.
 - These 10 tasks are a **public dev set**. A hidden test set comes later.
 
 ## Check before you upload
