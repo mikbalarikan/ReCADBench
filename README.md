@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ECF1F5?style=flat-square&labelColor=0D161F" alt="MIT license"></a>
   <a href="spec/"><img src="https://img.shields.io/badge/spec-0.3.0-00E5FF?style=flat-square&labelColor=0D161F" alt="spec 0.3.0"></a>
   <a href="spec/pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?style=flat-square&logo=python&logoColor=white&labelColor=0D161F" alt="Python 3.11+"></a>
   <a href="#the-10-tasks"><img src="https://img.shields.io/badge/tasks-10%20real%20scans-FF9A4D?style=flat-square&labelColor=0D161F" alt="10 real scans"></a>
