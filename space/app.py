@@ -292,6 +292,28 @@ def _preview_url(cfg: Config, tid: str) -> tuple[str | None, str | None]:
     return asset, None
 
 
+def _gallery_image(cfg: Config, tid: str) -> str | None:
+    """Thumbnail for the Per task picker: the same scan render the Tasks tab shows.
+
+    gr.Gallery takes a local file (copied into Gradio's cache when the page is built) or an
+    http(s) URL, not a site-relative path, so local copies come first: the inputs preview, the
+    bundled render, then the inputs dataset URL from ``_preview_url``.
+    """
+    if not TASK_ID_RE.match(tid):
+        return None
+    if cfg.inputs_dir is not None and (cfg.inputs_dir / "parts" / tid / "preview.png").is_file():
+        return str(cfg.inputs_dir / "parts" / tid / "preview.png")
+    if cfg.assets_dir is not None and (cfg.assets_dir / "tasks" / f"{tid}.webp").is_file():
+        return str(cfg.assets_dir / "tasks" / f"{tid}.webp")
+    url, _ = _preview_url(cfg, tid)
+    return url if lb.safe_url(url) else None
+
+
+def task_label(task: dict, index: int) -> str:
+    """Picker label: '01 · Motor mount cup'."""
+    return f"{lb.task_number(task, index):02d} · {lb.task_title(task)}"
+
+
 # --- static page content ----------------------------------------------------------------------
 
 _e = lb.esc
@@ -341,7 +363,9 @@ def header_html(cfg: Config) -> str:
         f"<div class='rcb rcb-hero'>{banner}<div class='rcb-hero-body'>"
         "<p class='rcb-tagline'><b>ReCADBench Open</b> &middot; the scan &rarr; parametric CAD "
         "benchmark for AI agents. Rebuild 10 real 3D scans as clean solids, upload the STEP "
-        "files, get an automatic score out of 95.</p>"
+        "files, get an automatic score out of 95. Solved just one scan? <b>Single-task "
+        "submissions are welcome</b> and ranked on that task in the <a href='#' "
+        "data-tab='Per task'>Per task</a> view.</p>"
         f"<div class='rcb-chips'>{chips}</div></div></div>"
     )
 
@@ -378,6 +402,20 @@ def zip_layout(task_ids: list[str]) -> str:
         f"   {bend} output.step",
     ]
     return "\n".join(rows)
+
+
+def zip_layout_single(task_ids: list[str]) -> str:
+    """The smallest valid upload: meta.json plus one task folder."""
+    first = task_ids[0] if task_ids else "<task_id>"
+    tee, bend = "├─", "└─"
+    return "\n".join(
+        [
+            "submission.zip",
+            f"{tee} meta.json               required",
+            f"{bend} {first}/",
+            f"   {bend} output.step          ONE solid, mm, scanner frame",
+        ]
+    )
 
 
 def _mb(n: int) -> str:
@@ -418,6 +456,11 @@ def take_part_html(cfg: Config) -> str:
         "<div class='rcb-two'>"
         + _code(zip_layout(cfg.task_ids), "zip layout")
         + _code(meta_example_json(keys), "meta.json")
+        + "</div><div class='rcb-note' style='--accent:#9DFF2E'><p><b>Single-task submissions "
+        "are welcome.</b> Solved one scan? Upload <code>meta.json</code> plus that one task "
+        "folder. It is ranked on that task in the <a href='#' data-tab='Per task'><b>Per task"
+        "</b></a> view; the overall /95 board counts the other tasks as 0.</p>"
+        + _code(zip_layout_single(cfg.task_ids), "single-task zip")
         + "</div><p>Check the zip before you upload (run it inside <code>recadbench/</code>; "
         "add <code>--inputs parts</code> for the bounding-box check against the scans):</p>"
         + _code("python tools/sanity_check_submission.py submission.zip", "shell")
@@ -479,7 +522,8 @@ def rules_html() -> str:
         "<li>Do not use public CAD of the same commercial products; declare anything you used.</li>"
         "<li>Set <code>human_in_loop: true</code> if a person edited geometry or steered the agent "
         "beyond the initial prompt (the row gets a badge).</li>"
-        "<li>Partial submissions are fine; unsolved tasks score 0.</li>"
+        "<li>Partial and single-task submissions are fine; unsolved tasks score 0 on the "
+        "overall board, and each task that is scored is ranked in the Per task view.</li>"
         "</ul></div></div>"
     )
 
@@ -600,6 +644,10 @@ FAQ = (
      "<p>No. The site checks the zip structure without extracting or executing anything, and "
      "the Open scorer reads only <code>output.step</code>. A <code>native/</code> model is "
      "touched only for Verified, rebuilt by an admin offline in a network-less sandbox.</p>"),
+    ("Can I submit just one task?",
+     "<p>Yes. A zip with <code>meta.json</code> and a single task folder is a valid "
+     "submission. The overall Open /95 counts the other tasks as 0, and the <b>Per task</b> tab "
+     "ranks every submission that covers a task on that task alone.</p>"),
     ("How often can I submit?",
      f"<p>{MAX_PER_DAY} submissions per Hugging Face user per UTC day. Uploading the same zip "
      "again is recognised by its sha256 and not scored twice; a failed run can be retried.</p>"),
@@ -749,14 +797,42 @@ def build_demo(
     def all_rows() -> list[dict]:
         return list(cfg.reference_rows) + store_rows()
 
-    def board_views(force: bool = False):
+    task_info = {t["id"]: (i, t) for i, t in enumerate(tasks)}
+    first_task = task_order[0] if task_order else None
+
+    def task_view(rows: list[dict], tid: str | None) -> str:
+        """Per task tab: the chosen task's header and ranked table (unknown id -> first task)."""
+        tid = tid if tid in task_info else first_task
+        if tid is None:
+            return ""
+        i, task = task_info[tid]
+        return lb.task_board_html(rows, tid, task, index=i)
+
+    def board_views(force: bool = False, tid: str | None = None):
         refresh(force=force)
         rows = all_rows()
         return (
             lb.leaderboard_html(rows, cfg.task_ids),
             lb.stats_html(lb.stats(rows, cfg.task_ids)),
             lb.heatmap_html(rows, task_order, tasks),
+            task_view(rows, tid),
         )
+
+    def on_task_pick(tid: str | None):
+        return task_view(all_rows(), tid)
+
+    gallery_items, gallery_ids = [], []
+    for i, t in enumerate(tasks):
+        img = _gallery_image(cfg, t["id"])
+        if img:
+            gallery_items.append((img, task_label(t, i)))
+            gallery_ids.append(t["id"])
+
+    def on_gallery_pick(evt: gr.SelectData):
+        idx = evt.index
+        ok = isinstance(idx, int) and not isinstance(idx, bool) and 0 <= idx < len(gallery_ids)
+        tid = gallery_ids[idx] if ok else first_task
+        return tid, task_view(all_rows(), tid)
 
     def my_rows(profile, force: bool = False) -> str:
         user = username(profile)
@@ -799,7 +875,7 @@ def build_demo(
     previews = {t["id"]: _preview_url(cfg, t["id"]) for t in tasks}
     # anonymous POST /gradio_api/upload lands in Gradio's temp folder: drop old files
     with gr.Blocks(title="ReCADBench Open", delete_cache=GRADIO_DELETE_CACHE) as demo:
-        _html(header_html(cfg))
+        _html(header_html(cfg), js=True)
         stats_box = _html(lb.stats_html(lb.stats(rows0, cfg.task_ids)))
         with gr.Tabs(elem_classes=["rcb-tabs"]):
             with gr.Tab("🏆 Leaderboard", id="leaderboard"):
@@ -819,6 +895,40 @@ def build_demo(
                     "<span><span class='rcb-badge hil'>human in loop</span> a person steered "
                     "or edited</span>"
                     "<span>S1-S4: mean over all tasks (missing = 0)</span></div>"
+                )
+            with gr.Tab("🎯 Per task", id="per-task"):
+                _html(_section("One task at a time", "Per task",
+                               "every submission that covers a task, ranked on that task "
+                               "alone (/95); single-task submissions welcome"))  # fmt: skip
+                task_gallery = None
+                if gallery_items:
+                    task_gallery = gr.Gallery(
+                        value=gallery_items,
+                        columns=5,
+                        height="auto",
+                        allow_preview=False,
+                        object_fit="contain",
+                        buttons=[],
+                        interactive=False,
+                        show_label=False,
+                        elem_classes=["rcb-task-pick"],
+                    )
+                task_pick = gr.Dropdown(
+                    choices=[(task_label(t, i), t["id"]) for i, t in enumerate(tasks)],
+                    value=first_task,
+                    label="Task",
+                    interactive=True,
+                )
+                task_box = _html(task_view(rows0, first_task), js=True)
+                with gr.Row():
+                    btn_task_refresh = gr.Button("Refresh", size="sm", scale=0, min_width=120)
+                _html(
+                    "<div class='rcb rcb-legend'>"
+                    "<span>A submission is listed for a task when its <code>output.step</code> "
+                    "was scored; a gate failure scores 0 and is listed last; scoring errors "
+                    "are not listed</span>"
+                    "<span>S1-S4: this task only</span>"
+                    "<span>the overall Open /95 board stays the main ranking</span></div>"
                 )
             with gr.Tab("🧩 Tasks", id="tasks"):
                 _html(_section(
@@ -850,7 +960,7 @@ def build_demo(
             with gr.Tab("📏 Scoring", id="scoring"):
                 _html(scoring_html(cfg))
             with gr.Tab("🔎 Detailed", id="detailed"):
-                _html(_section("Per task", "Detailed", "Open total (0-95) per task"))
+                _html(_section("Task × submission", "Detailed", "Open total (0-95) per task"))
                 heat = _html(
                     lb.heatmap_html(rows0, task_order, tasks), elem_classes=["rcb-heat-host"]
                 )
@@ -866,14 +976,18 @@ def build_demo(
                 adm_rows = gr.Markdown()
         _html(footer_html())
 
-        views = [board, stats_box, heat]
-        btn_refresh.click(lambda: board_views(force=True), outputs=views)
+        views = [board, stats_box, heat, task_box]
+        btn_refresh.click(lambda tid: board_views(True, tid), inputs=task_pick, outputs=views)
+        btn_task_refresh.click(lambda tid: board_views(True, tid), inputs=task_pick, outputs=views)
+        task_pick.input(on_task_pick, inputs=task_pick, outputs=task_box)
+        if task_gallery is not None:
+            task_gallery.select(on_gallery_pick, outputs=[task_pick, task_box])
         btn_submit.click(_profiled(on_submit, cfg, 1), inputs=upload, outputs=[status, mine])
         btn_mine.click(_profiled(lambda p: my_rows(p, force=True), cfg, 0), outputs=mine)
         btn_admin.click(
             _profiled(on_admin, cfg, 2), inputs=[adm_action, adm_sid], outputs=[adm_msg, adm_rows]
         )
-        demo.load(board_views, outputs=views)
+        demo.load(lambda tid: board_views(tid=tid), inputs=task_pick, outputs=views)
         demo.load(_profiled(my_rows, cfg, 0), outputs=mine)
         demo.load(_profiled(admin_visible, cfg, 0), outputs=admin_tab)
         demo.load(_profiled(admin_table, cfg, 0), outputs=adm_rows)

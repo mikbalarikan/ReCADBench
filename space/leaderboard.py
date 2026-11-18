@@ -370,6 +370,150 @@ def my_submissions_html(rows: list[dict], user: str | None, report_base: str = "
     )
 
 
+# --- per-task board ---------------------------------------------------------------------------
+
+# A row covers a task when that task's public entry is "ok" or "gate_fail" (an output.step was
+# scored); "missing" and "error" are left out of that task's board.
+TASK_BOARD_STATUSES = ("ok", "gate_fail")
+
+
+def _task_entry(row: dict, task_id: str) -> dict:
+    per = row.get("per_task")
+    entry = per.get(task_id) if isinstance(per, dict) else None
+    return entry if isinstance(entry, dict) else {}
+
+
+def _task_total(entry: dict) -> float:
+    """The task score used for ranking: the public total; a gate failure scores 0."""
+    if entry.get("status") != "ok":
+        return 0.0
+    return _num(entry.get("total")) or 0.0
+
+
+def task_board_rows(rows: list[dict], task_id: str) -> list[dict]:
+    """Scored rows (reference rows too) that cover ``task_id``, best task score first.
+
+    Passing rows rank by the task total; gate failures score 0 and come last; ties keep the
+    earlier submission first. Uses only the public per-task entry of each row.
+    """
+    shown = [
+        r
+        for r in rows
+        if r.get("status") == "done"
+        and _task_entry(r, task_id).get("status") in TASK_BOARD_STATUSES
+    ]
+
+    def key(r: dict) -> tuple:
+        e = _task_entry(r, task_id)
+        ok = e.get("status") == "ok"
+        return (0 if ok else 1, -_task_total(e), str(r.get("submitted_at") or ""))
+
+    return sorted(shown, key=key)
+
+
+def task_header_html(task: dict, index: int = 0) -> str:
+    """Header of the per-task view: number, title, task id, family, difficulty, class."""
+    tid = str(task.get("id", ""))
+    family = task_family(task)
+    diff = str(task.get("difficulty") or "").strip().lower()
+    meta = [f"<code>{esc(tid)}</code>"]
+    if family:
+        meta.append(f"<span>{esc(family)}</span>")
+    if diff:
+        meta.append(f"<span class='rcb-pill d-{esc(diff.replace(' ', '-'))}'>{esc(diff)}</span>")
+    if task.get("tolerance_class") not in (None, ""):
+        meta.append(f"<span>class <b>{esc(str(task['tolerance_class']))}</b></span>")
+    return (
+        f"<div class='rcb-taskhead'><span class='no'>{task_number(task, index):02d}</span>"
+        f"<div><div class='title'>{esc(task_title(task))}</div>"
+        f"<div class='meta'>{''.join(meta)}</div></div></div>"
+    )
+
+
+def task_board_html(
+    rows: list[dict],
+    task_id: str,
+    task: dict | None = None,
+    report_base: str = "reports",
+    index: int = 0,
+) -> str:
+    """Per-task leaderboard (HTML): every scored submission that covers ``task_id``, ranked on
+    that task alone (/95). Empty -> an invitation to send a single-task submission."""
+    task = task if isinstance(task, dict) else {"id": task_id}
+    head = task_header_html(task, index)
+    shown = task_board_rows(rows, task_id)
+    if not shown:
+        return (
+            f"<div class='rcb'>{head}<div class='rcb-empty'>"
+            "<div class='big'>No submission covers this task yet</div>"
+            "<p>Single-task submissions are welcome: a zip with <code>meta.json</code> and just "
+            "this task's folder is ranked here. See <a href='#' data-tab='Take part'>"
+            "<b>Take part</b></a>.</p></div></div>"
+        )
+    comp_heads = "".join(
+        f"<th class='num'>{c} <span class='muted'>/{m}</span></th>" for c, m in COMPONENTS
+    )
+    thead = (
+        "<tr><th>#</th><th>Submission</th><th>Submitter</th><th>Model</th><th>CAD backend</th>"
+        f"<th>Harness</th><th class='num'>Task /95</th>{comp_heads}<th>Gate OK</th><th></th></tr>"
+    )
+    body = []
+    for rank, r in enumerate(shown, 1):
+        e = _task_entry(r, task_id)
+        ok = e.get("status") == "ok"
+        medal = f" r{rank}" if ok and rank <= 3 else ""
+        sid = str(r.get("submission_id", ""))
+        name = _text(r.get("submission_name") or sid)
+        url = safe_url(r.get("agent_url"))
+        if url:
+            name = (
+                f"<a href='{esc(url)}' target='_blank' rel='nofollow noopener noreferrer ugc'>"
+                f"{name}</a>"
+            )
+        total = _task_total(e)
+        pct = max(0.0, min(100.0, 100.0 * total / OPEN_MAX))
+        shown_total = _fmt(e.get("total")) if ok else "0.0"
+        score = (
+            f"<div class='rcb-score'><div class='rcb-bar'><span style='width:{pct:.1f}%'>"
+            f"</span></div><b>{shown_total}</b></div>"
+        )
+        comps = "".join(
+            f"<td class='num'>{_fmt(e.get(c))}</td>" if ok else "<td class='num muted'>-</td>"
+            for c, _ in COMPONENTS
+        )
+        if ok:
+            gate = "<span class='rcb-gate ok'>yes</span>"
+        else:
+            # own cap (not _text, which stops at 80); a tap-to-open "why?" too: touch has no hover
+            why = esc(" ".join(str(e.get("gate_reason") or "gate failed").split())[:200])
+            gate = (
+                f"<span class='rcb-gate no' title='{why}'>no</span>"
+                f"<details class='rcb-gate-why'><summary>why?</summary>{why}</details>"
+            )
+        href = _report_href(r, report_base)
+        report = (
+            f"<a class='rcb-report' href='{esc(href)}' target='_blank' rel='noopener'>Report</a>"
+            if href
+            else ""
+        )
+        body.append(
+            f"<tr class='{'' if ok else 'unfinished'}'>"
+            f"<td><span class='rcb-rank{medal}'>{rank}</span></td>"
+            f"<td class='subm'><div class='rcb-name'>{name}</div>"
+            f"<div class='rcb-badges'>{_row_badges(r)}</div></td>"
+            f"<td>{_text(r.get('submitter_name')) or '-'}</td>"
+            f"<td><div class='rcb-model'>{_text(r.get('model')) or '-'}</div></td>"
+            f"<td>{_text(r.get('cad_backend')) or '-'}</td>"
+            f"<td>{_text(r.get('harness')) or '-'}</td>"
+            f"<td class='num'>{score}</td>{comps}<td>{gate}</td><td>{report}</td></tr>"
+        )
+    return (
+        f"<div class='rcb'>{head}<div class='rcb-board-wrap'>"
+        f"<table class='rcb-board rcb-taskboard'><thead>{thead}</thead>"
+        f"<tbody>{''.join(body)}</tbody></table></div></div>"
+    )
+
+
 # --- heatmap ----------------------------------------------------------------------------------
 
 
