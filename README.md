@@ -13,7 +13,7 @@
   <a href="spec/pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?style=flat-square&logo=python&logoColor=white&labelColor=0D161F" alt="Python 3.11+"></a>
   <a href="#the-10-tasks"><img src="https://img.shields.io/badge/tasks-10%20scans-FF9A4D?style=flat-square&labelColor=0D161F" alt="10 real scans"></a>
   <a href="#scoring"><img src="https://img.shields.io/badge/score-%2F95%20%2B%20PASS-9DFF2E?style=flat-square&labelColor=0D161F" alt="score /95 + PASS"></a>
-  <a href="#recadbench-open-coming-soon"><img src="https://img.shields.io/badge/Open-coming%20soon-FF3347?style=flat-square&labelColor=0D161F" alt="ReCADBench Open: coming soon"></a>
+  <a href="https://huggingface.co/spaces/mikbalarikan/recadbench-open"><img src="https://img.shields.io/badge/Open-live%20on%20HF-FF3347?style=flat-square&logo=huggingface&logoColor=white&labelColor=0D161F" alt="ReCADBench Open: live on Hugging Face"></a>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="#what-we-measure">What we measure</a> ·
   <a href="#the-10-tasks">The 10 tasks</a> ·
   <a href="#scoring">Scoring</a> ·
-  <a href="#recadbench-open-coming-soon">Take part</a> ·
+  <a href="https://huggingface.co/spaces/mikbalarikan/recadbench-open"><b>Take part</b></a> ·
   <a href="docs/architecture/README.md">Architecture</a> ·
   <a href="STATUS.md">Status</a>
 </p>
@@ -95,20 +95,21 @@ mesh-to-B-rep conversion, and must be a real parametric body. Fail the gate and 
 
 Full rubric, tolerance classes and statistics: [`docs/architecture/03_SCORING.md`](docs/architecture/03_SCORING.md).
 
-## ReCADBench Open: coming soon
+## ReCADBench Open: take part
 
 Run **your own agent** on 10 real scans and upload the result: an online leaderboard in the style of Hugging Face's
 CADGenBench (a Space with Submit / Leaderboard / Tasks, a public inputs dataset, private ground truth).
-Announced live on 2026-11-18; the submission Space opens in the coming days. Design: [ADR 0006](docs/adr/0006-open-track.md)
-(proposed).
+Live since 2026-11-18: **[ReCADBench Open Space](https://huggingface.co/spaces/mikbalarikan/recadbench-open)** · inputs: [`mikbalarikan/recadbench-inputs`](https://huggingface.co/datasets/mikbalarikan/recadbench-inputs).
+Design: [ADR 0006](docs/adr/0006-open-track.md).
 
 **How to take part**
 
-1. Download the 10 scans (`input.stl` + `task.yaml` per task) from the public inputs dataset (link follows).
+1. Download the 10 scans (`input.stl` + `task.yaml` per task) from the [public inputs dataset](https://huggingface.co/datasets/mikbalarikan/recadbench-inputs):
+   `hf download mikbalarikan/recadbench-inputs --repo-type dataset --local-dir recadbench`.
 2. Let your agent, with any CAD backend (build123d, NX, FreeCAD, SolidWorks, Onshape, ...), rebuild each scan as one
    parametric solid in the scanner frame.
 3. Zip `meta.json` + one folder per task with `output.step` (optionally the native model, plan and run stats) and
-   upload it in the Space. Format: [docs/benchmark/submission.md](docs/benchmark/submission.md) (draft).
+   upload it in the [Space](https://huggingface.co/spaces/mikbalarikan/recadbench-open). Format: [docs/benchmark/submission.md](docs/benchmark/submission.md).
 4. Every upload gets an automatic **Open** score (/95, STEP-only). Submissions with a native model can be
    **Verified** by an admin, which adds the official feature-tree score (S2) and PASS.
 
@@ -123,6 +124,9 @@ Ground truth is never published. These 10 tasks are a public dev set; a hidden t
 | `recadbench-strategies` | private | L3 strategies A–D + oracle, RE toolkit `retk` |
 | `recadbench-data` | private | agent-visible inputs: `parts/<id>/{input.stl, task.yaml}`, splits |
 | `recadbench-gt` | private | ground truth — evaluator host only |
+| HF [`mikbalarikan/recadbench-inputs`](https://huggingface.co/datasets/mikbalarikan/recadbench-inputs) | public | the 10 Open tasks: scans, `task.yaml`, previews, submission format, checker |
+| HF [`mikbalarikan/recadbench-open`](https://huggingface.co/spaces/mikbalarikan/recadbench-open) | public | ReCADBench Open Space: leaderboard, tasks, upload, in-Space scoring |
+| HF `mikbalarikan/recadbench-gt`, `recadbench-submissions` | private | GT for the Space scorer; uploaded zips, results, public reports |
 
 No part data or ground truth is ever committed here: CI runs `dataset/tools/check_public.py`, which
 rejects `*.stl`, `*.step`, `*.stp`, `*.prt` outside `backends/conformance/` and `evaluator/golden/`
